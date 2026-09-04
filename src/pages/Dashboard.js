@@ -1,31 +1,91 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, {
+  useEffect,
+  useState,
+} from 'react';
+
+import {
+  Link,
+} from 'react-router-dom';
 
 const Dashboard = ({
   incidents,
   onDeleteIncident,
   onUpdateStatus,
 }) => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [priorityFilter, setPriorityFilter] =
-    useState('All');
-  const [statusFilter, setStatusFilter] =
-    useState('All');
-  const [sortOption, setSortOption] =
-    useState('Newest');
+  const [
+    searchTerm,
+    setSearchTerm,
+  ] = useState('');
 
-  const [noteInputs, setNoteInputs] = useState({});
-  const [activityOverrides, setActivityOverrides] =
-    useState({});
-  const [savingNoteId, setSavingNoteId] =
-    useState(null);
-  const [noteErrors, setNoteErrors] = useState({});
+  const [
+    priorityFilter,
+    setPriorityFilter,
+  ] = useState('All');
 
-  const token = localStorage.getItem('token');
+  const [
+    statusFilter,
+    setStatusFilter,
+  ] = useState('All');
+
+  const [
+    sortOption,
+    setSortOption,
+  ] = useState('Newest');
+
+  const [
+    noteInputs,
+    setNoteInputs,
+  ] = useState({});
+
+  const [
+    activityOverrides,
+    setActivityOverrides,
+  ] = useState({});
+
+  const [
+    savingNoteId,
+    setSavingNoteId,
+  ] = useState(null);
+
+  const [
+    noteErrors,
+    setNoteErrors,
+  ] = useState({});
 
   // -----------------------------------
-  // ICON STYLE
+  // AI EVALUATION STATE
   // -----------------------------------
+
+  const [
+    aiMetrics,
+    setAiMetrics,
+  ] = useState({
+    totalAnalyses: 0,
+    groundedAnalyses: 0,
+    groundingRate: 0,
+    helpful: 0,
+    notHelpful: 0,
+    noFeedback: 0,
+    ratedAnalyses: 0,
+    helpfulRate: 0,
+    averageSemanticSimilarity: null,
+    semanticEvaluations: 0,
+  });
+
+  const [
+    isAiMetricsLoading,
+    setIsAiMetricsLoading,
+  ] = useState(true);
+
+  const [
+    aiMetricsError,
+    setAiMetricsError,
+  ] = useState('');
+
+  const token =
+    localStorage.getItem(
+      'token'
+    );
 
   const iconStyle = {
     width: '18px',
@@ -37,87 +97,165 @@ const Dashboard = ({
   // INCIDENT STATISTICS
   // -----------------------------------
 
-  const totalIncidents = incidents.length;
+  const totalIncidents =
+    incidents.length;
 
-  const openIncidents = incidents.filter(
-    (incident) => incident.status === 'Open'
-  ).length;
+  const openIncidents =
+    incidents.filter(
+      (incident) =>
+        incident.status ===
+        'Open'
+    ).length;
 
-  const inProgressIncidents = incidents.filter(
-    (incident) =>
-      incident.status === 'In Progress'
-  ).length;
+  const inProgressIncidents =
+    incidents.filter(
+      (incident) =>
+        incident.status ===
+        'In Progress'
+    ).length;
 
-  const resolvedIncidents = incidents.filter(
-    (incident) => incident.status === 'Resolved'
-  ).length;
+  const resolvedIncidents =
+    incidents.filter(
+      (incident) =>
+        incident.status ===
+        'Resolved'
+    ).length;
 
-  const criticalIncidents = incidents.filter(
-    (incident) =>
-      incident.priority === 'Critical'
-  ).length;
+  const criticalIncidents =
+    incidents.filter(
+      (incident) =>
+        incident.priority ===
+        'Critical'
+    ).length;
 
   // -----------------------------------
-  // AI EVALUATION STATISTICS
+  // LOAD AI EVALUATION METRICS
   // -----------------------------------
 
-  const helpfulAiFeedback = incidents.filter(
-    (incident) =>
-      incident.aiFeedback === 'helpful'
-  ).length;
+  useEffect(() => {
+    let cancelled = false;
 
-  const notHelpfulAiFeedback = incidents.filter(
-    (incident) =>
-      incident.aiFeedback === 'not_helpful'
-  ).length;
+    const loadAiMetrics =
+      async () => {
+        try {
+          setIsAiMetricsLoading(
+            true
+          );
 
-  const totalAiFeedback =
-    helpfulAiFeedback + notHelpfulAiFeedback;
+          setAiMetricsError(
+            ''
+          );
 
-  const aiHelpfulRate =
-    totalAiFeedback === 0
-      ? 0
-      : Math.round(
-          (helpfulAiFeedback /
-            totalAiFeedback) *
-            100
-        );
+          const response =
+            await fetch(
+              'http://localhost:5001/api/incidents/analytics/ai-evaluation',
+              {
+                headers: {
+                  Authorization:
+                    `Bearer ${token}`,
+                },
+              }
+            );
+
+          const data =
+            await response.json();
+
+          if (
+            !response.ok
+          ) {
+            throw new Error(
+              data.error ||
+                'Failed to load AI evaluation metrics'
+            );
+          }
+
+          if (
+            !cancelled
+          ) {
+            setAiMetrics(
+              data.metrics
+            );
+          }
+        } catch (
+          error
+        ) {
+          if (
+            !cancelled
+          ) {
+            setAiMetricsError(
+              error.message
+            );
+          }
+        } finally {
+          if (
+            !cancelled
+          ) {
+            setIsAiMetricsLoading(
+              false
+            );
+          }
+        }
+      };
+
+    if (token) {
+      loadAiMetrics();
+    } else {
+      setIsAiMetricsLoading(
+        false
+      );
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   // -----------------------------------
   // SEARCH + FILTER
   // -----------------------------------
 
-  const filteredIncidents = incidents.filter(
-    (incident) => {
-      const title =
-        incident.title?.toLowerCase() || '';
+  const filteredIncidents =
+    incidents.filter(
+      (incident) => {
+        const title =
+          incident.title ||
+          '';
 
-      const description =
-        incident.description?.toLowerCase() || '';
+        const description =
+          incident.description ||
+          '';
 
-      const search =
-        searchTerm.toLowerCase();
+        const matchesSearch =
+          title
+            .toLowerCase()
+            .includes(
+              searchTerm.toLowerCase()
+            ) ||
+          description
+            .toLowerCase()
+            .includes(
+              searchTerm.toLowerCase()
+            );
 
-      const matchesSearch =
-        title.includes(search) ||
-        description.includes(search);
+        const matchesPriority =
+          priorityFilter ===
+            'All' ||
+          incident.priority ===
+            priorityFilter;
 
-      const matchesPriority =
-        priorityFilter === 'All' ||
-        incident.priority ===
-          priorityFilter;
+        const matchesStatus =
+          statusFilter ===
+            'All' ||
+          incident.status ===
+            statusFilter;
 
-      const matchesStatus =
-        statusFilter === 'All' ||
-        incident.status === statusFilter;
-
-      return (
-        matchesSearch &&
-        matchesPriority &&
-        matchesStatus
-      );
-    }
-  );
+        return (
+          matchesSearch &&
+          matchesPriority &&
+          matchesStatus
+        );
+      }
+    );
 
   // -----------------------------------
   // SORTING
@@ -138,227 +276,364 @@ const Dashboard = ({
 
   const sortedIncidents = [
     ...filteredIncidents,
-  ].sort((a, b) => {
-    if (sortOption === 'Newest') {
-      return (
-        new Date(b.createdAt) -
-        new Date(a.createdAt)
-      );
-    }
+  ].sort(
+    (a, b) => {
+      if (
+        sortOption ===
+        'Newest'
+      ) {
+        return (
+          new Date(
+            b.createdAt
+          ) -
+          new Date(
+            a.createdAt
+          )
+        );
+      }
 
-    if (sortOption === 'Oldest') {
-      return (
-        new Date(a.createdAt) -
-        new Date(b.createdAt)
-      );
-    }
+      if (
+        sortOption ===
+        'Oldest'
+      ) {
+        return (
+          new Date(
+            a.createdAt
+          ) -
+          new Date(
+            b.createdAt
+          )
+        );
+      }
 
-    if (sortOption === 'Priority') {
-      return (
-        priorityOrder[b.priority] -
-        priorityOrder[a.priority]
-      );
-    }
+      if (
+        sortOption ===
+        'Priority'
+      ) {
+        return (
+          priorityOrder[
+            b.priority
+          ] -
+          priorityOrder[
+            a.priority
+          ]
+        );
+      }
 
-    if (sortOption === 'Status') {
-      return (
-        statusOrder[a.status] -
-        statusOrder[b.status]
-      );
-    }
+      if (
+        sortOption ===
+        'Status'
+      ) {
+        return (
+          statusOrder[
+            a.status
+          ] -
+          statusOrder[
+            b.status
+          ]
+        );
+      }
 
-    return 0;
-  });
+      return 0;
+    }
+  );
 
   // -----------------------------------
   // CLEAR FILTERS
   // -----------------------------------
 
-  const clearFilters = () => {
-    setSearchTerm('');
-    setPriorityFilter('All');
-    setStatusFilter('All');
-    setSortOption('Newest');
-  };
+  const clearFilters =
+    () => {
+      setSearchTerm('');
+
+      setPriorityFilter(
+        'All'
+      );
+
+      setStatusFilter(
+        'All'
+      );
+
+      setSortOption(
+        'Newest'
+      );
+    };
 
   // -----------------------------------
   // DATE FORMATTER
   // -----------------------------------
 
-  const formatDate = (dateString) => {
+  const formatDate = (
+    dateString
+  ) => {
     if (!dateString) {
       return 'Not available';
     }
 
     return new Date(
       dateString
-    ).toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    });
+    ).toLocaleString(
+      'en-US',
+      {
+        month:
+          'short',
+
+        day:
+          'numeric',
+
+        year:
+          'numeric',
+
+        hour:
+          'numeric',
+
+        minute:
+          '2-digit',
+      }
+    );
   };
+
+  // -----------------------------------
+  // NOTE CHANGE
+  // -----------------------------------
+
+  const handleNoteChange =
+    (
+      incidentId,
+      value
+    ) => {
+      setNoteInputs(
+        (
+          currentInputs
+        ) => ({
+          ...currentInputs,
+
+          [incidentId]:
+            value,
+        })
+      );
+
+      setNoteErrors(
+        (
+          currentErrors
+        ) => ({
+          ...currentErrors,
+
+          [incidentId]:
+            '',
+        })
+      );
+    };
 
   // -----------------------------------
   // ADD NOTE
   // -----------------------------------
 
-  const handleNoteChange = (
-    incidentId,
-    value
-  ) => {
-    setNoteInputs((currentInputs) => ({
-      ...currentInputs,
-      [incidentId]: value,
-    }));
+  const handleAddNote =
+    async (
+      incidentId
+    ) => {
+      const note =
+        noteInputs[
+          incidentId
+        ] || '';
 
-    setNoteErrors((currentErrors) => ({
-      ...currentErrors,
-      [incidentId]: '',
-    }));
-  };
+      if (
+        !note.trim()
+      ) {
+        setNoteErrors(
+          (
+            currentErrors
+          ) => ({
+            ...currentErrors,
 
-  const handleAddNote = async (
-    incidentId
-  ) => {
-    const note =
-      noteInputs[incidentId] || '';
-
-    if (!note.trim()) {
-      setNoteErrors(
-        (currentErrors) => ({
-          ...currentErrors,
-          [incidentId]:
-            'Please enter a note.',
-        })
-      );
-
-      return;
-    }
-
-    try {
-      setSavingNoteId(incidentId);
-
-      setNoteErrors(
-        (currentErrors) => ({
-          ...currentErrors,
-          [incidentId]: '',
-        })
-      );
-
-      const response = await fetch(
-        `http://localhost:5001/api/incidents/${incidentId}/notes`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type':
-              'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            note: note.trim(),
-          }),
-        }
-      );
-
-      const data =
-        await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.error ||
-            'Failed to add note'
+            [incidentId]:
+              'Please enter a note.',
+          })
         );
+
+        return;
       }
 
-      setActivityOverrides(
-        (currentActivities) => ({
-          ...currentActivities,
-          [incidentId]:
-            data.activity || [],
-        })
-      );
+      try {
+        setSavingNoteId(
+          incidentId
+        );
 
-      setNoteInputs(
-        (currentInputs) => ({
-          ...currentInputs,
-          [incidentId]: '',
-        })
-      );
-    } catch (error) {
-      setNoteErrors(
-        (currentErrors) => ({
-          ...currentErrors,
-          [incidentId]:
-            error.message,
-        })
-      );
-    } finally {
-      setSavingNoteId(null);
-    }
-  };
+        setNoteErrors(
+          (
+            currentErrors
+          ) => ({
+            ...currentErrors,
+
+            [incidentId]:
+              '',
+          })
+        );
+
+        const response =
+          await fetch(
+            `http://localhost:5001/api/incidents/${incidentId}/notes`,
+            {
+              method:
+                'POST',
+
+              headers: {
+                'Content-Type':
+                  'application/json',
+
+                Authorization:
+                  `Bearer ${token}`,
+              },
+
+              body:
+                JSON.stringify({
+                  note:
+                    note.trim(),
+                }),
+            }
+          );
+
+        const data =
+          await response.json();
+
+        if (
+          !response.ok
+        ) {
+          throw new Error(
+            data.error ||
+              'Failed to add note'
+          );
+        }
+
+        setActivityOverrides(
+          (
+            currentActivities
+          ) => ({
+            ...currentActivities,
+
+            [incidentId]:
+              data.activity ||
+              [],
+          })
+        );
+
+        setNoteInputs(
+          (
+            currentInputs
+          ) => ({
+            ...currentInputs,
+
+            [incidentId]:
+              '',
+          })
+        );
+      } catch (
+        error
+      ) {
+        setNoteErrors(
+          (
+            currentErrors
+          ) => ({
+            ...currentErrors,
+
+            [incidentId]:
+              error.message,
+          })
+        );
+      } finally {
+        setSavingNoteId(
+          null
+        );
+      }
+    };
 
   // -----------------------------------
   // STATUS UPDATE
   // -----------------------------------
 
-  const handleStatusUpdate = async (
-    incidentId,
-    newStatus
-  ) => {
-    await onUpdateStatus(
+  const handleStatusUpdate =
+    async (
       incidentId,
       newStatus
-    );
+    ) => {
+      await onUpdateStatus(
+        incidentId,
+        newStatus
+      );
 
-    setActivityOverrides(
-      (currentActivities) => {
-        const updatedActivities = {
-          ...currentActivities,
-        };
+      setActivityOverrides(
+        (
+          currentActivities
+        ) => {
+          const updatedActivities =
+            {
+              ...currentActivities,
+            };
 
-        delete updatedActivities[
-          incidentId
-        ];
+          delete updatedActivities[
+            incidentId
+          ];
 
-        return updatedActivities;
-      }
-    );
-  };
+          return updatedActivities;
+        }
+      );
+    };
 
   // -----------------------------------
   // SHARED STYLES
   // -----------------------------------
 
   const inputStyle = {
-    width: '100%',
-    padding: '11px 12px',
+    width:
+      '100%',
+
+    padding:
+      '11px 12px',
+
     border:
       '1px solid #cbd5e1',
-    borderRadius: '7px',
-    fontSize: '14px',
-    boxSizing: 'border-box',
-    outline: 'none',
-    backgroundColor: 'white',
+
+    borderRadius:
+      '7px',
+
+    fontSize:
+      '14px',
+
+    boxSizing:
+      'border-box',
+
+    outline:
+      'none',
+
+    backgroundColor:
+      'white',
   };
 
   const statCardStyle = {
-    flex: '1',
-    minWidth: '110px',
-    backgroundColor: 'white',
+    flex:
+      '1',
+
+    minWidth:
+      '110px',
+
+    backgroundColor:
+      'white',
+
     border:
       '1px solid #d9dee8',
-    borderRadius: '8px',
-    padding: '16px 12px',
-    textAlign: 'center',
-    boxSizing: 'border-box',
-  };
 
-  const aiStatCardStyle = {
-    ...statCardStyle,
-    minWidth: '140px',
+    borderRadius:
+      '8px',
+
+    padding:
+      '16px 12px',
+
+    textAlign:
+      'center',
+
+    boxSizing:
+      'border-box',
   };
 
   // -----------------------------------
@@ -369,18 +644,32 @@ const Dashboard = ({
     <div
       className="dashboard"
       style={{
-        maxWidth: '850px',
-        margin: '0 auto',
-        padding: '0 30px 40px',
-        boxSizing: 'border-box',
+        maxWidth:
+          '850px',
+
+        margin:
+          '0 auto',
+
+        padding:
+          '0 30px 40px',
+
+        boxSizing:
+          'border-box',
       }}
     >
       <h2
         style={{
-          color: '#111827',
-          fontSize: '26px',
-          marginBottom: '20px',
-          textAlign: 'center',
+          color:
+            '#111827',
+
+          fontSize:
+            '26px',
+
+          marginBottom:
+            '20px',
+
+          textAlign:
+            'center',
         }}
       >
         Incident Dashboard
@@ -390,121 +679,218 @@ const Dashboard = ({
 
       <div
         style={{
-          display: 'flex',
-          gap: '12px',
-          flexWrap: 'wrap',
-          marginBottom: '24px',
+          display:
+            'flex',
+
+          gap:
+            '12px',
+
+          flexWrap:
+            'wrap',
+
+          marginBottom:
+            '24px',
         }}
       >
-        <div style={statCardStyle}>
+        <div
+          style={
+            statCardStyle
+          }
+        >
           <div
             style={{
-              fontSize: '28px',
-              fontWeight: '700',
-              color: '#111827',
-              marginBottom: '6px',
+              fontSize:
+                '28px',
+
+              fontWeight:
+                '700',
+
+              color:
+                '#111827',
+
+              marginBottom:
+                '6px',
             }}
           >
-            {totalIncidents}
+            {
+              totalIncidents
+            }
           </div>
 
           <div
             style={{
-              color: '#64748b',
-              fontSize: '14px',
-              fontWeight: '600',
+              color:
+                '#64748b',
+
+              fontSize:
+                '14px',
+
+              fontWeight:
+                '600',
             }}
           >
             Total
           </div>
         </div>
 
-        <div style={statCardStyle}>
+        <div
+          style={
+            statCardStyle
+          }
+        >
           <div
             style={{
-              fontSize: '28px',
-              fontWeight: '700',
-              color: '#2563eb',
-              marginBottom: '6px',
+              fontSize:
+                '28px',
+
+              fontWeight:
+                '700',
+
+              color:
+                '#2563eb',
+
+              marginBottom:
+                '6px',
             }}
           >
-            {openIncidents}
+            {
+              openIncidents
+            }
           </div>
 
           <div
             style={{
-              color: '#64748b',
-              fontSize: '14px',
-              fontWeight: '600',
+              color:
+                '#64748b',
+
+              fontSize:
+                '14px',
+
+              fontWeight:
+                '600',
             }}
           >
             Open
           </div>
         </div>
 
-        <div style={statCardStyle}>
+        <div
+          style={
+            statCardStyle
+          }
+        >
           <div
             style={{
-              fontSize: '28px',
-              fontWeight: '700',
-              color: '#b7791f',
-              marginBottom: '6px',
+              fontSize:
+                '28px',
+
+              fontWeight:
+                '700',
+
+              color:
+                '#b7791f',
+
+              marginBottom:
+                '6px',
             }}
           >
-            {inProgressIncidents}
+            {
+              inProgressIncidents
+            }
           </div>
 
           <div
             style={{
-              color: '#64748b',
-              fontSize: '14px',
-              fontWeight: '600',
+              color:
+                '#64748b',
+
+              fontSize:
+                '14px',
+
+              fontWeight:
+                '600',
             }}
           >
             In Progress
           </div>
         </div>
 
-        <div style={statCardStyle}>
+        <div
+          style={
+            statCardStyle
+          }
+        >
           <div
             style={{
-              fontSize: '28px',
-              fontWeight: '700',
-              color: '#16a34a',
-              marginBottom: '6px',
+              fontSize:
+                '28px',
+
+              fontWeight:
+                '700',
+
+              color:
+                '#16a34a',
+
+              marginBottom:
+                '6px',
             }}
           >
-            {resolvedIncidents}
+            {
+              resolvedIncidents
+            }
           </div>
 
           <div
             style={{
-              color: '#64748b',
-              fontSize: '14px',
-              fontWeight: '600',
+              color:
+                '#64748b',
+
+              fontSize:
+                '14px',
+
+              fontWeight:
+                '600',
             }}
           >
             Resolved
           </div>
         </div>
 
-        <div style={statCardStyle}>
+        <div
+          style={
+            statCardStyle
+          }
+        >
           <div
             style={{
-              fontSize: '28px',
-              fontWeight: '700',
-              color: '#dc2626',
-              marginBottom: '6px',
+              fontSize:
+                '28px',
+
+              fontWeight:
+                '700',
+
+              color:
+                '#dc2626',
+
+              marginBottom:
+                '6px',
             }}
           >
-            {criticalIncidents}
+            {
+              criticalIncidents
+            }
           </div>
 
           <div
             style={{
-              color: '#64748b',
-              fontSize: '14px',
-              fontWeight: '600',
+              color:
+                '#64748b',
+
+              fontSize:
+                '14px',
+
+              fontWeight:
+                '600',
             }}
           >
             Critical
@@ -516,187 +902,554 @@ const Dashboard = ({
 
       <div
         style={{
-          backgroundColor: '#f8faff',
+          backgroundColor:
+            '#f8faff',
+
           border:
             '1px solid #c7d7fe',
-          borderRadius: '10px',
-          padding: '22px',
-          marginBottom: '24px',
+
+          borderRadius:
+            '10px',
+
+          padding:
+            '22px',
+
+          marginBottom:
+            '24px',
         }}
       >
         <div
           style={{
-            textAlign: 'center',
-            marginBottom: '18px',
+            textAlign:
+              'center',
+
+            marginBottom:
+              '18px',
           }}
         >
-          <div
+          <h3
             style={{
-              display: 'flex',
-              justifyContent:
-                'center',
-              alignItems: 'center',
-              gap: '9px',
-              marginBottom: '7px',
+              margin:
+                '0 0 6px',
+
+              color:
+                '#111827',
+
+              fontSize:
+                '19px',
             }}
           >
-            <div
-              style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '8px',
-                backgroundColor:
-                  '#2563eb',
-                color: 'white',
-                display: 'flex',
-                justifyContent:
-                  'center',
-                alignItems: 'center',
-                fontWeight: '700',
-              }}
-            >
-              ✦
-            </div>
-
-            <h3
-              style={{
-                margin: '0',
-                color: '#111827',
-                fontSize: '19px',
-              }}
-            >
-              AI Evaluation
-            </h3>
-          </div>
+            AI Evaluation
+          </h3>
 
           <p
             style={{
-              margin: '0',
-              color: '#64748b',
-              fontSize: '13px',
-              lineHeight: '1.6',
+              margin:
+                '0',
+
+              color:
+                '#64748b',
+
+              fontSize:
+                '13px',
+
+              lineHeight:
+                '1.5',
             }}
           >
-            Measure AI Incident
-            Copilot quality from
-            engineer feedback.
+            Measure grounding
+            quality and engineer
+            feedback across saved
+            AI analysis runs.
           </p>
         </div>
 
-        <div
-          style={{
-            display: 'flex',
-            gap: '12px',
-            flexWrap: 'wrap',
-          }}
-        >
-          <div style={aiStatCardStyle}>
-            <div
-              style={{
-                fontSize: '27px',
-                fontWeight: '700',
-                color: '#2563eb',
-                marginBottom: '6px',
-              }}
-            >
-              {totalAiFeedback}
-            </div>
-
-            <div
-              style={{
-                color: '#64748b',
-                fontSize: '13px',
-                fontWeight: '600',
-              }}
-            >
-              AI Evaluations
-            </div>
-          </div>
-
-          <div style={aiStatCardStyle}>
-            <div
-              style={{
-                fontSize: '27px',
-                fontWeight: '700',
-                color: '#16a34a',
-                marginBottom: '6px',
-              }}
-            >
-              {helpfulAiFeedback}
-            </div>
-
-            <div
-              style={{
-                color: '#64748b',
-                fontSize: '13px',
-                fontWeight: '600',
-              }}
-            >
-              Helpful
-            </div>
-          </div>
-
-          <div style={aiStatCardStyle}>
-            <div
-              style={{
-                fontSize: '27px',
-                fontWeight: '700',
-                color: '#dc2626',
-                marginBottom: '6px',
-              }}
-            >
-              {notHelpfulAiFeedback}
-            </div>
-
-            <div
-              style={{
-                color: '#64748b',
-                fontSize: '13px',
-                fontWeight: '600',
-              }}
-            >
-              Not Helpful
-            </div>
-          </div>
-
-          <div style={aiStatCardStyle}>
-            <div
-              style={{
-                fontSize: '27px',
-                fontWeight: '700',
-                color: '#7c3aed',
-                marginBottom: '6px',
-              }}
-            >
-              {aiHelpfulRate}%
-            </div>
-
-            <div
-              style={{
-                color: '#64748b',
-                fontSize: '13px',
-                fontWeight: '600',
-              }}
-            >
-              Helpful Rate
-            </div>
-          </div>
-        </div>
-
-        {totalAiFeedback === 0 && (
+        {isAiMetricsLoading && (
           <div
             style={{
-              marginTop: '16px',
-              textAlign: 'center',
-              color: '#64748b',
-              fontSize: '13px',
+              textAlign:
+                'center',
+
+              color:
+                '#64748b',
+
+              fontSize:
+                '13px',
+
+              padding:
+                '10px 0 18px',
             }}
           >
-            No AI feedback collected
-            yet. Analyze an incident and
-            rate the result.
+            Loading AI evaluation
+            metrics...
           </div>
         )}
+
+        {aiMetricsError &&
+          !isAiMetricsLoading && (
+            <div
+              style={{
+                marginBottom:
+                  '16px',
+
+                padding:
+                  '12px',
+
+                borderRadius:
+                  '7px',
+
+                backgroundColor:
+                  '#fef2f2',
+
+                border:
+                  '1px solid #fecaca',
+
+                color:
+                  '#b91c1c',
+
+                fontSize:
+                  '13px',
+
+                textAlign:
+                  'center',
+              }}
+            >
+              {
+                aiMetricsError
+              }
+            </div>
+          )}
+
+        {!isAiMetricsLoading &&
+          !aiMetricsError && (
+            <>
+              <div
+                style={{
+                  display:
+                    'flex',
+
+                  gap:
+                    '12px',
+
+                  flexWrap:
+                    'wrap',
+                }}
+              >
+                <div
+                  style={
+                    statCardStyle
+                  }
+                >
+                  <div
+                    style={{
+                      fontSize:
+                        '27px',
+
+                      fontWeight:
+                        '700',
+
+                      color:
+                        '#2563eb',
+
+                      marginBottom:
+                        '6px',
+                    }}
+                  >
+                    {
+                      aiMetrics.totalAnalyses
+                    }
+                  </div>
+
+                  <div
+                    style={{
+                      color:
+                        '#64748b',
+
+                      fontSize:
+                        '13px',
+
+                      fontWeight:
+                        '600',
+                    }}
+                  >
+                    Total AI
+                    Analyses
+                  </div>
+                </div>
+
+                <div
+                  style={
+                    statCardStyle
+                  }
+                >
+                  <div
+                    style={{
+                      fontSize:
+                        '27px',
+
+                      fontWeight:
+                        '700',
+
+                      color:
+                        '#16a34a',
+
+                      marginBottom:
+                        '6px',
+                    }}
+                  >
+                    {
+                      aiMetrics.groundedAnalyses
+                    }
+                  </div>
+
+                  <div
+                    style={{
+                      color:
+                        '#64748b',
+
+                      fontSize:
+                        '13px',
+
+                      fontWeight:
+                        '600',
+                    }}
+                  >
+                    Grounded
+                    Analyses
+                  </div>
+                </div>
+
+                <div
+                  style={
+                    statCardStyle
+                  }
+                >
+                  <div
+                    style={{
+                      fontSize:
+                        '27px',
+
+                      fontWeight:
+                        '700',
+
+                      color:
+                        '#0f766e',
+
+                      marginBottom:
+                        '6px',
+                    }}
+                  >
+                    {
+                      aiMetrics.groundingRate
+                    }
+                    %
+                  </div>
+
+                  <div
+                    style={{
+                      color:
+                        '#64748b',
+
+                      fontSize:
+                        '13px',
+
+                      fontWeight:
+                        '600',
+                    }}
+                  >
+                    Grounding Rate
+                  </div>
+                </div>
+
+                <div
+                  style={
+                    statCardStyle
+                  }
+                >
+                  <div
+                    style={{
+                      fontSize:
+                        '27px',
+
+                      fontWeight:
+                        '700',
+
+                      color:
+                        '#7c3aed',
+
+                      marginBottom:
+                        '6px',
+                    }}
+                  >
+                    {aiMetrics.averageSemanticSimilarity ===
+                    null
+                      ? '—'
+                      : aiMetrics.averageSemanticSimilarity}
+                  </div>
+
+                  <div
+                    style={{
+                      color:
+                        '#64748b',
+
+                      fontSize:
+                        '13px',
+
+                      fontWeight:
+                        '600',
+                    }}
+                  >
+                    Avg Semantic
+                    Similarity
+                  </div>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display:
+                    'flex',
+
+                  gap:
+                    '12px',
+
+                  flexWrap:
+                    'wrap',
+
+                  marginTop:
+                    '12px',
+                }}
+              >
+                <div
+                  style={
+                    statCardStyle
+                  }
+                >
+                  <div
+                    style={{
+                      fontSize:
+                        '27px',
+
+                      fontWeight:
+                        '700',
+
+                      color:
+                        '#16a34a',
+
+                      marginBottom:
+                        '6px',
+                    }}
+                  >
+                    {
+                      aiMetrics.helpful
+                    }
+                  </div>
+
+                  <div
+                    style={{
+                      color:
+                        '#64748b',
+
+                      fontSize:
+                        '13px',
+
+                      fontWeight:
+                        '600',
+                    }}
+                  >
+                    Helpful
+                  </div>
+                </div>
+
+                <div
+                  style={
+                    statCardStyle
+                  }
+                >
+                  <div
+                    style={{
+                      fontSize:
+                        '27px',
+
+                      fontWeight:
+                        '700',
+
+                      color:
+                        '#dc2626',
+
+                      marginBottom:
+                        '6px',
+                    }}
+                  >
+                    {
+                      aiMetrics.notHelpful
+                    }
+                  </div>
+
+                  <div
+                    style={{
+                      color:
+                        '#64748b',
+
+                      fontSize:
+                        '13px',
+
+                      fontWeight:
+                        '600',
+                    }}
+                  >
+                    Not Helpful
+                  </div>
+                </div>
+
+                <div
+                  style={
+                    statCardStyle
+                  }
+                >
+                  <div
+                    style={{
+                      fontSize:
+                        '27px',
+
+                      fontWeight:
+                        '700',
+
+                      color:
+                        '#64748b',
+
+                      marginBottom:
+                        '6px',
+                    }}
+                  >
+                    {
+                      aiMetrics.noFeedback
+                    }
+                  </div>
+
+                  <div
+                    style={{
+                      color:
+                        '#64748b',
+
+                      fontSize:
+                        '13px',
+
+                      fontWeight:
+                        '600',
+                    }}
+                  >
+                    No Feedback
+                  </div>
+                </div>
+
+                <div
+                  style={
+                    statCardStyle
+                  }
+                >
+                  <div
+                    style={{
+                      fontSize:
+                        '27px',
+
+                      fontWeight:
+                        '700',
+
+                      color:
+                        '#7c3aed',
+
+                      marginBottom:
+                        '6px',
+                    }}
+                  >
+                    {
+                      aiMetrics.helpfulRate
+                    }
+                    %
+                  </div>
+
+                  <div
+                    style={{
+                      color:
+                        '#64748b',
+
+                      fontSize:
+                        '13px',
+
+                      fontWeight:
+                        '600',
+                    }}
+                  >
+                    Helpful Rate
+                  </div>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  marginTop:
+                    '16px',
+
+                  padding:
+                    '12px 14px',
+
+                  borderRadius:
+                    '7px',
+
+                  backgroundColor:
+                    'white',
+
+                  border:
+                    '1px solid #dbeafe',
+
+                  color:
+                    '#64748b',
+
+                  fontSize:
+                    '12px',
+
+                  lineHeight:
+                    '1.6',
+                }}
+              >
+                Helpful Rate uses
+                only analyses that
+                received feedback.
+                Semantic similarity
+                is averaged across
+                stored semantic
+                runbook sources.
+              </div>
+
+              {aiMetrics.totalAnalyses ===
+                0 && (
+                <div
+                  style={{
+                    marginTop:
+                      '16px',
+
+                    textAlign:
+                      'center',
+
+                    color:
+                      '#64748b',
+
+                    fontSize:
+                      '13px',
+                  }}
+                >
+                  No saved AI
+                  analyses yet.
+                  Analyze an
+                  incident to begin
+                  collecting
+                  evaluation
+                  metrics.
+                </div>
+              )}
+            </>
+          )}
       </div>
 
       {/* SEARCH / FILTER / SORT */}
@@ -705,16 +1458,26 @@ const Dashboard = ({
         style={{
           border:
             '1px solid #d9dee8',
-          borderRadius: '8px',
-          backgroundColor: 'white',
-          padding: '20px',
-          marginBottom: '24px',
+
+          borderRadius:
+            '8px',
+
+          backgroundColor:
+            'white',
+
+          padding:
+            '20px',
+
+          marginBottom:
+            '24px',
         }}
       >
         <input
           type="text"
           placeholder="Search incidents..."
-          value={searchTerm}
+          value={
+            searchTerm
+          }
           onChange={(e) =>
             setSearchTerm(
               e.target.value
@@ -722,19 +1485,28 @@ const Dashboard = ({
           }
           style={{
             ...inputStyle,
-            marginBottom: '14px',
+
+            marginBottom:
+              '14px',
           }}
         />
 
         <div
           style={{
-            display: 'flex',
-            gap: '12px',
-            flexWrap: 'wrap',
+            display:
+              'flex',
+
+            gap:
+              '12px',
+
+            flexWrap:
+              'wrap',
           }}
         >
           <select
-            value={priorityFilter}
+            value={
+              priorityFilter
+            }
             onChange={(e) =>
               setPriorityFilter(
                 e.target.value
@@ -742,9 +1514,15 @@ const Dashboard = ({
             }
             style={{
               ...inputStyle,
-              flex: '1',
-              minWidth: '180px',
-              cursor: 'pointer',
+
+              flex:
+                '1',
+
+              minWidth:
+                '180px',
+
+              cursor:
+                'pointer',
             }}
           >
             <option value="All">
@@ -769,7 +1547,9 @@ const Dashboard = ({
           </select>
 
           <select
-            value={statusFilter}
+            value={
+              statusFilter
+            }
             onChange={(e) =>
               setStatusFilter(
                 e.target.value
@@ -777,9 +1557,15 @@ const Dashboard = ({
             }
             style={{
               ...inputStyle,
-              flex: '1',
-              minWidth: '180px',
-              cursor: 'pointer',
+
+              flex:
+                '1',
+
+              minWidth:
+                '180px',
+
+              cursor:
+                'pointer',
             }}
           >
             <option value="All">
@@ -800,7 +1586,9 @@ const Dashboard = ({
           </select>
 
           <select
-            value={sortOption}
+            value={
+              sortOption
+            }
             onChange={(e) =>
               setSortOption(
                 e.target.value
@@ -808,9 +1596,15 @@ const Dashboard = ({
             }
             style={{
               ...inputStyle,
-              flex: '1',
-              minWidth: '180px',
-              cursor: 'pointer',
+
+              flex:
+                '1',
+
+              minWidth:
+                '180px',
+
+              cursor:
+                'pointer',
             }}
           >
             <option value="Newest">
@@ -822,30 +1616,52 @@ const Dashboard = ({
             </option>
 
             <option value="Priority">
-              Priority: Critical → Low
+              Priority:
+              Critical → Low
             </option>
 
             <option value="Status">
-              Status: Open → In Progress
-              → Resolved
+              Status: Open →
+              In Progress →
+              Resolved
             </option>
           </select>
         </div>
 
         <button
-          onClick={clearFilters}
+          onClick={
+            clearFilters
+          }
           style={{
-            width: '100%',
-            marginTop: '14px',
-            backgroundColor: 'white',
-            color: '#2563eb',
+            width:
+              '100%',
+
+            marginTop:
+              '14px',
+
+            backgroundColor:
+              'white',
+
+            color:
+              '#2563eb',
+
             border:
               '1px solid #2563eb',
-            padding: '10px 14px',
-            borderRadius: '7px',
-            cursor: 'pointer',
-            fontWeight: '600',
-            fontSize: '14px',
+
+            padding:
+              '10px 14px',
+
+            borderRadius:
+              '7px',
+
+            cursor:
+              'pointer',
+
+            fontWeight:
+              '600',
+
+            fontSize:
+              '14px',
           }}
         >
           Clear Filters
@@ -856,32 +1672,58 @@ const Dashboard = ({
 
       <p
         style={{
-          textAlign: 'center',
-          color: '#64748b',
-          marginBottom: '18px',
-          fontSize: '14px',
+          textAlign:
+            'center',
+
+          color:
+            '#64748b',
+
+          marginBottom:
+            '18px',
+
+          fontSize:
+            '14px',
         }}
       >
-        Showing {sortedIncidents.length}{' '}
-        of {incidents.length} incidents
+        Showing{' '}
+        {
+          sortedIncidents.length
+        }{' '}
+        of{' '}
+        {
+          incidents.length
+        }{' '}
+        incidents
       </p>
 
       {/* NO RESULTS */}
 
-      {sortedIncidents.length === 0 && (
+      {sortedIncidents.length ===
+        0 && (
         <div
           style={{
             border:
               '1px solid #d9dee8',
-            borderRadius: '8px',
-            padding: '30px',
-            textAlign: 'center',
-            color: '#64748b',
-            backgroundColor: 'white',
+
+            borderRadius:
+              '8px',
+
+            padding:
+              '30px',
+
+            textAlign:
+              'center',
+
+            color:
+              '#64748b',
+
+            backgroundColor:
+              'white',
           }}
         >
-          No incidents match your
-          search or filters.
+          No incidents match
+          your search or
+          filters.
         </div>
       )}
 
@@ -896,33 +1738,48 @@ const Dashboard = ({
             incident.activity ||
             [];
 
-          const sortedActivity = [
-            ...activity,
-          ].sort(
-            (a, b) =>
-              new Date(
-                b.createdAt
-              ) -
-              new Date(
-                a.createdAt
-              )
-          );
+          const sortedActivity =
+            [
+              ...activity,
+            ].sort(
+              (a, b) =>
+                new Date(
+                  b.createdAt
+                ) -
+                new Date(
+                  a.createdAt
+                )
+            );
 
           return (
             <div
-              key={incident._id}
+              key={
+                incident._id
+              }
               style={{
                 border:
                   '1px solid #d9dee8',
-                padding: '24px',
-                marginBottom: '20px',
-                borderRadius: '8px',
-                width: '100%',
+
+                padding:
+                  '24px',
+
+                marginBottom:
+                  '20px',
+
+                borderRadius:
+                  '8px',
+
+                width:
+                  '100%',
+
                 boxSizing:
                   'border-box',
+
                 backgroundColor:
                   'white',
-                textAlign: 'center',
+
+                textAlign:
+                  'center',
               }}
             >
               {/* TITLE */}
@@ -936,29 +1793,46 @@ const Dashboard = ({
               >
                 <h3
                   style={{
-                    color: '#1f2937',
-                    marginTop: '0',
+                    color:
+                      '#1f2937',
+
+                    marginTop:
+                      '0',
+
                     marginBottom:
                       '8px',
-                    fontWeight: '700',
-                    cursor: 'pointer',
+
+                    fontWeight:
+                      '700',
+
+                    cursor:
+                      'pointer',
                   }}
                 >
-                  {incident.title}
+                  {
+                    incident.title
+                  }
                 </h3>
               </Link>
-
-              {/* VIEW DETAILS */}
 
               <Link
                 to={`/incidents/${incident._id}`}
                 style={{
                   display:
                     'inline-block',
-                  marginBottom: '18px',
-                  color: '#2563eb',
-                  fontSize: '13px',
-                  fontWeight: '600',
+
+                  marginBottom:
+                    '18px',
+
+                  color:
+                    '#2563eb',
+
+                  fontSize:
+                    '13px',
+
+                  fontWeight:
+                    '600',
+
                   textDecoration:
                     'none',
                 }}
@@ -970,32 +1844,48 @@ const Dashboard = ({
 
               <p
                 style={{
-                  color: '#374151',
-                  marginTop: '0',
-                  marginBottom: '18px',
-                  lineHeight: '1.6',
+                  color:
+                    '#374151',
+
+                  marginTop:
+                    '0',
+
+                  marginBottom:
+                    '18px',
                 }}
               >
-                {incident.description}
+                {
+                  incident.description
+                }
               </p>
 
               {/* PRIORITY */}
 
               <div
                 style={{
-                  display: 'flex',
+                  display:
+                    'flex',
+
                   alignItems:
                     'center',
+
                   justifyContent:
                     'center',
-                  gap: '7px',
+
+                  gap:
+                    '7px',
+
                   marginBottom:
                     '16px',
-                  color: '#172554',
+
+                  color:
+                    '#172554',
                 }}
               >
                 <svg
-                  style={iconStyle}
+                  style={
+                    iconStyle
+                  }
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
@@ -1026,7 +1916,9 @@ const Dashboard = ({
                           : '#16a34a',
                     }}
                   >
-                    {incident.priority}
+                    {
+                      incident.priority
+                    }
                   </strong>
                 </span>
               </div>
@@ -1035,19 +1927,29 @@ const Dashboard = ({
 
               <div
                 style={{
-                  display: 'flex',
+                  display:
+                    'flex',
+
                   alignItems:
                     'center',
+
                   justifyContent:
                     'center',
-                  gap: '7px',
+
+                  gap:
+                    '7px',
+
                   marginBottom:
                     '18px',
-                  color: '#172554',
+
+                  color:
+                    '#172554',
                 }}
               >
                 <svg
-                  style={iconStyle}
+                  style={
+                    iconStyle
+                  }
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
@@ -1079,49 +1981,12 @@ const Dashboard = ({
                           : '#1554c0',
                     }}
                   >
-                    {incident.status}
+                    {
+                      incident.status
+                    }
                   </strong>
                 </span>
               </div>
-
-              {/* AI FEEDBACK BADGE */}
-
-              {incident.aiFeedback && (
-                <div
-                  style={{
-                    display:
-                      'inline-block',
-                    marginBottom:
-                      '18px',
-                    padding:
-                      '6px 11px',
-                    borderRadius:
-                      '20px',
-                    backgroundColor:
-                      incident.aiFeedback ===
-                      'helpful'
-                        ? '#f0fdf4'
-                        : '#fef2f2',
-                    color:
-                      incident.aiFeedback ===
-                      'helpful'
-                        ? '#15803d'
-                        : '#b91c1c',
-                    border:
-                      incident.aiFeedback ===
-                      'helpful'
-                        ? '1px solid #bbf7d0'
-                        : '1px solid #fecaca',
-                    fontSize: '12px',
-                    fontWeight: '700',
-                  }}
-                >
-                  {incident.aiFeedback ===
-                  'helpful'
-                    ? '👍 AI Helpful'
-                    : '👎 AI Not Helpful'}
-                </div>
-              )}
 
               {/* CREATED / UPDATED */}
 
@@ -1129,14 +1994,24 @@ const Dashboard = ({
                 style={{
                   borderTop:
                     '1px solid #e5e7eb',
+
                   borderBottom:
                     '1px solid #e5e7eb',
-                  padding: '12px 0',
+
+                  padding:
+                    '12px 0',
+
                   marginBottom:
                     '18px',
-                  color: '#64748b',
-                  fontSize: '13px',
-                  lineHeight: '1.7',
+
+                  color:
+                    '#64748b',
+
+                  fontSize:
+                    '13px',
+
+                  lineHeight:
+                    '1.7',
                 }}
               >
                 <div>
@@ -1154,17 +2029,25 @@ const Dashboard = ({
                 </div>
               </div>
 
-              {/* ACTIONS */}
+              {/* INCIDENT ACTIONS */}
 
               <div
                 style={{
-                  display: 'flex',
+                  display:
+                    'flex',
+
                   alignItems:
                     'center',
+
                   justifyContent:
                     'center',
-                  gap: '12px',
-                  flexWrap: 'wrap',
+
+                  gap:
+                    '12px',
+
+                  flexWrap:
+                    'wrap',
+
                   marginBottom:
                     '24px',
                 }}
@@ -1175,17 +2058,25 @@ const Dashboard = ({
                     style={{
                       backgroundColor:
                         'white',
-                      color: '#16a34a',
+
+                      color:
+                        '#16a34a',
+
                       border:
                         '1px solid #22c55e',
+
                       padding:
                         '9px 14px',
+
                       borderRadius:
                         '6px',
+
                       cursor:
                         'pointer',
+
                       fontWeight:
                         '600',
+
                       fontSize:
                         '14px',
                     }}
@@ -1206,17 +2097,25 @@ const Dashboard = ({
                     style={{
                       backgroundColor:
                         'white',
-                      color: '#1554c0',
+
+                      color:
+                        '#1554c0',
+
                       border:
                         '1px solid #2563eb',
+
                       padding:
                         '9px 14px',
+
                       borderRadius:
                         '6px',
+
                       cursor:
                         'pointer',
+
                       fontWeight:
                         '600',
+
                       fontSize:
                         '14px',
                     }}
@@ -1235,16 +2134,27 @@ const Dashboard = ({
                   style={{
                     backgroundColor:
                       'white',
-                    color: '#ef4444',
+
+                    color:
+                      '#ef4444',
+
                     border:
                       '1px solid #ef4444',
+
                     padding:
                       '9px 14px',
+
                     borderRadius:
                       '6px',
-                    cursor: 'pointer',
-                    fontWeight: '600',
-                    fontSize: '14px',
+
+                    cursor:
+                      'pointer',
+
+                    fontWeight:
+                      '600',
+
+                    fontSize:
+                      '14px',
                   }}
                   onClick={() =>
                     onDeleteIncident(
@@ -1262,17 +2172,27 @@ const Dashboard = ({
                 style={{
                   borderTop:
                     '1px solid #e5e7eb',
-                  paddingTop: '20px',
-                  textAlign: 'left',
+
+                  paddingTop:
+                    '20px',
+
+                  textAlign:
+                    'left',
                 }}
               >
                 <h4
                   style={{
-                    marginTop: '0',
+                    marginTop:
+                      '0',
+
                     marginBottom:
                       '16px',
-                    color: '#111827',
-                    fontSize: '17px',
+
+                    color:
+                      '#111827',
+
+                    fontSize:
+                      '17px',
                   }}
                 >
                   Activity
@@ -1282,11 +2202,17 @@ const Dashboard = ({
 
                 <div
                   style={{
-                    display: 'flex',
-                    gap: '10px',
+                    display:
+                      'flex',
+
+                    gap:
+                      '10px',
+
                     marginBottom:
                       '18px',
-                    flexWrap: 'wrap',
+
+                    flexWrap:
+                      'wrap',
                   }}
                 >
                   <input
@@ -1314,18 +2240,27 @@ const Dashboard = ({
                       }
                     }}
                     style={{
-                      flex: '1',
+                      flex:
+                        '1',
+
                       minWidth:
                         '220px',
+
                       padding:
                         '10px 12px',
+
                       border:
                         '1px solid #cbd5e1',
+
                       borderRadius:
                         '6px',
+
                       fontSize:
                         '14px',
-                      outline: 'none',
+
+                      outline:
+                        'none',
+
                       boxSizing:
                         'border-box',
                     }}
@@ -1347,19 +2282,28 @@ const Dashboard = ({
                         incident._id
                           ? '#94a3b8'
                           : '#2563eb',
-                      color: 'white',
-                      border: 'none',
+
+                      color:
+                        'white',
+
+                      border:
+                        'none',
+
                       padding:
                         '10px 16px',
+
                       borderRadius:
                         '6px',
+
                       cursor:
                         savingNoteId ===
                         incident._id
                           ? 'not-allowed'
                           : 'pointer',
+
                       fontWeight:
                         '600',
+
                       fontSize:
                         '14px',
                     }}
@@ -1378,9 +2322,12 @@ const Dashboard = ({
                 ] && (
                   <div
                     style={{
-                      color: '#dc2626',
+                      color:
+                        '#dc2626',
+
                       fontSize:
                         '13px',
+
                       marginBottom:
                         '14px',
                     }}
@@ -1399,15 +2346,18 @@ const Dashboard = ({
                 0 ? (
                   <div
                     style={{
-                      color: '#64748b',
+                      color:
+                        '#64748b',
+
                       fontSize:
                         '14px',
+
                       padding:
                         '12px 0',
                     }}
                   >
-                    No activity recorded
-                    yet.
+                    No activity
+                    recorded yet.
                   </div>
                 ) : (
                   <div>
@@ -1424,9 +2374,13 @@ const Dashboard = ({
                           style={{
                             display:
                               'flex',
-                            gap: '12px',
+
+                            gap:
+                              '12px',
+
                             marginBottom:
                               '14px',
+
                             alignItems:
                               'flex-start',
                           }}
@@ -1435,10 +2389,13 @@ const Dashboard = ({
                             style={{
                               width:
                                 '10px',
+
                               height:
                                 '10px',
+
                               borderRadius:
                                 '50%',
+
                               backgroundColor:
                                 activityItem.type ===
                                 'note'
@@ -1447,8 +2404,10 @@ const Dashboard = ({
                                     'status'
                                   ? '#16a34a'
                                   : '#64748b',
+
                               marginTop:
                                 '5px',
+
                               flexShrink:
                                 0,
                             }}
@@ -1459,8 +2418,10 @@ const Dashboard = ({
                               style={{
                                 color:
                                   '#374151',
+
                                 fontSize:
                                   '14px',
+
                                 fontWeight:
                                   '500',
                               }}
@@ -1474,8 +2435,10 @@ const Dashboard = ({
                               style={{
                                 color:
                                   '#94a3b8',
+
                                 fontSize:
                                   '12px',
+
                                 marginTop:
                                   '3px',
                               }}
@@ -1491,14 +2454,17 @@ const Dashboard = ({
                   </div>
                 )}
 
-                {/* FULL INCIDENT LINK */}
-
                 <div
                   style={{
-                    marginTop: '18px',
-                    paddingTop: '16px',
+                    marginTop:
+                      '18px',
+
+                    paddingTop:
+                      '16px',
+
                     borderTop:
                       '1px solid #e5e7eb',
+
                     textAlign:
                       'center',
                   }}
@@ -1508,16 +2474,22 @@ const Dashboard = ({
                     style={{
                       display:
                         'inline-block',
-                      color: '#2563eb',
+
+                      color:
+                        '#2563eb',
+
                       fontWeight:
                         '600',
+
                       fontSize:
                         '14px',
+
                       textDecoration:
                         'none',
                     }}
                   >
-                    Open Full Incident →
+                    Open Full
+                    Incident →
                   </Link>
                 </div>
               </div>
