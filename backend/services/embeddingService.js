@@ -1,33 +1,54 @@
 const { GoogleGenAI } = require('@google/genai');
 
+const {
+  embeddingDurationSeconds,
+} = require('../middleware/metricsMiddleware');
+
 const getEmbedding = async (text) => {
   if (!text || !text.trim()) {
-    throw new Error('Text is required to create an embedding');
+    throw new Error(
+      'Text is required to create an embedding'
+    );
   }
 
-  const geminiKey = process.env.GEMINI_API_KEY;
+  const geminiKey =
+    process.env.GEMINI_API_KEY;
 
   if (!geminiKey) {
-    throw new Error('Gemini API key is not configured');
+    throw new Error(
+      'Gemini API key is not configured'
+    );
   }
 
   const ai = new GoogleGenAI({
     apiKey: geminiKey,
   });
 
-  const response = await ai.models.embedContent({
-    model: 'gemini-embedding-001',
-    contents: text,
-  });
+  const stopTimer =
+    embeddingDurationSeconds.startTimer({
+      operation: 'embedding_generation',
+    });
 
-  if (
-    !response.embeddings ||
-    response.embeddings.length === 0
-  ) {
-    throw new Error('Gemini did not return an embedding');
+  try {
+    const response =
+      await ai.models.embedContent({
+        model: 'gemini-embedding-001',
+        contents: text,
+      });
+
+    if (
+      !response.embeddings ||
+      response.embeddings.length === 0
+    ) {
+      throw new Error(
+        'Gemini did not return an embedding'
+      );
+    }
+
+    return response.embeddings[0].values;
+  } finally {
+    stopTimer();
   }
-
-  return response.embeddings[0].values;
 };
 
 module.exports = getEmbedding;

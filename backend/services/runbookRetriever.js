@@ -2,6 +2,10 @@ const incidentRunbooks = require('../runbooks/incidentRunbooks');
 const getEmbedding = require('./embeddingService');
 const cosineSimilarity = require('./vectorUtils');
 
+const {
+  semanticSearchDurationSeconds,
+} = require('../middleware/metricsMiddleware');
+
 const keywordRetrieve = (
   title,
   description,
@@ -52,20 +56,26 @@ const semanticRetrieve = async (
   description,
   limit = 2
 ) => {
-  const incidentText = `
+  const stopTimer =
+    semanticSearchDurationSeconds.startTimer({
+      operation: 'runbook_semantic_search',
+    });
+
+  try {
+    const incidentText = `
 Title: ${title || ''}
 
 Description:
 ${description || ''}
 `;
 
-  const incidentEmbedding =
-    await getEmbedding(incidentText);
+    const incidentEmbedding =
+      await getEmbedding(incidentText);
 
-  const scoredRunbooks = [];
+    const scoredRunbooks = [];
 
-  for (const runbook of incidentRunbooks) {
-    const runbookText = `
+    for (const runbook of incidentRunbooks) {
+      const runbookText = `
 Title: ${runbook.title}
 
 Category:
@@ -75,38 +85,39 @@ Content:
 ${runbook.content}
 `;
 
-    const runbookEmbedding =
-      await getEmbedding(runbookText);
+      const runbookEmbedding =
+        await getEmbedding(runbookText);
 
-    const similarity = cosineSimilarity(
-      incidentEmbedding,
-      runbookEmbedding
-    );
+      const similarity = cosineSimilarity(
+        incidentEmbedding,
+        runbookEmbedding
+      );
 
-    scoredRunbooks.push({
-      ...runbook,
-      semanticScore: similarity,
-      retrievalType: 'semantic',
-      matchedKeywords: [],
-    });
+      scoredRunbooks.push({
+        ...runbook,
+        semanticScore: similarity,
+        retrievalType: 'semantic',
+        matchedKeywords: [],
+      });
+    }
+
+    const minimumSimilarity = 0.72;
+
+    return scoredRunbooks
+      .filter(
+        (runbook) =>
+          runbook.semanticScore >=
+          minimumSimilarity
+      )
+      .sort(
+        (a, b) =>
+          b.semanticScore -
+          a.semanticScore
+      )
+      .slice(0, limit);
+  } finally {
+    stopTimer();
   }
-
-  // Increased from 0.55 to 0.72
-  // to reduce weak semantic matches.
-  const minimumSimilarity = 0.72;
-
-  return scoredRunbooks
-    .filter(
-      (runbook) =>
-        runbook.semanticScore >=
-        minimumSimilarity
-    )
-    .sort(
-      (a, b) =>
-        b.semanticScore -
-        a.semanticScore
-    )
-    .slice(0, limit);
 };
 
 const retrieveRelevantRunbooks = async (

@@ -7,6 +7,14 @@ const authMiddleware = require('../middleware/authMiddleware');
 const retrieveRelevantRunbooks = require('../services/runbookRetriever');
 const getEmbedding = require('../services/embeddingService');
 const cosineSimilarity = require('../services/vectorUtils');
+const { broadcastEvent } = require('../services/sseService');
+const {
+  recordIncidentEvent,
+} = require('../services/postgresService');
+
+const {
+  aiRequestDurationSeconds,
+} = require('../middleware/metricsMiddleware');
 
 const router = express.Router();
 
@@ -64,6 +72,26 @@ const withTimeout = (
   ]).finally(() => {
     clearTimeout(timeoutId);
   });
+};
+
+// -----------------------------------
+// AI METRICS HELPER
+// -----------------------------------
+
+const measureAiRequest = async (
+  operation,
+  requestFunction
+) => {
+  const stopTimer =
+    aiRequestDurationSeconds.startTimer({
+      operation,
+    });
+
+  try {
+    return await requestFunction();
+  } finally {
+    stopTimer();
+  }
 };
 
 // -----------------------------------
@@ -639,27 +667,31 @@ IMPORTANT RULES:
 `;
 
       const response =
-        await withTimeout(
-          ai.models.generateContent({
-            model: modelName,
+        await measureAiRequest(
+          'ai_tool_planning',
+          () =>
+            withTimeout(
+              ai.models.generateContent({
+                model: modelName,
 
-            contents: prompt,
+                contents: prompt,
 
-            config: {
-              tools: [
-                {
-                  functionDeclarations: [
-                    updateStatusTool,
-                    addNoteTool,
+                config: {
+                  tools: [
+                    {
+                      functionDeclarations: [
+                        updateStatusTool,
+                        addNoteTool,
+                      ],
+                    },
                   ],
                 },
-              ],
-            },
-          }),
+              }),
 
-          TOOL_PLANNING_TIMEOUT_MS,
+              TOOL_PLANNING_TIMEOUT_MS,
 
-          'AI tool planning took too long.'
+              'AI tool planning took too long.'
+            )
         );
 
       const functionCalls =
@@ -815,8 +847,6 @@ router.post(
         });
       }
 
-      // UPDATE STATUS TOOL
-
       if (
         toolCall.name ===
         'update_incident_status'
@@ -855,6 +885,40 @@ router.post(
 
         await incident.save();
 
+        await recordIncidentEvent({
+  incidentId:
+    incident._id.toString(),
+
+  userId,
+
+  eventType:
+    'ai_tool_executed',
+
+  source:
+    'status_change',
+
+  metadata: {
+    tool:
+      toolCall.name,
+
+    action:
+      'status_change',
+
+    previousStatus,
+            newStatus,
+          },
+        });
+
+        broadcastEvent(
+          userId,
+          'incident_updated',
+          {
+            incident,
+            source: 'ai_tool',
+            timestamp: new Date(),
+          }
+        );
+
         console.log(
           'AI TOOL EXECUTED: STATUS',
           previousStatus,
@@ -874,8 +938,6 @@ router.post(
         });
       }
 
-      // ADD NOTE TOOL
-
       if (
         toolCall.name ===
         'add_incident_note'
@@ -889,6 +951,40 @@ router.post(
         });
 
         await incident.save();
+
+       await recordIncidentEvent({
+  incidentId:
+    incident._id.toString(),
+
+  userId,
+
+  eventType:
+    'ai_tool_executed',
+
+  source:
+    'note_addition',
+
+  metadata: {
+    tool:
+      toolCall.name,
+
+    action:
+      'note_addition',
+
+    noteLength:
+      note.length,
+  },
+});
+
+        broadcastEvent(
+          userId,
+          'incident_updated',
+          {
+            incident,
+            source: 'ai_tool',
+            timestamp: new Date(),
+          }
+        );
 
         console.log(
           'AI TOOL EXECUTED: NOTE ADDED'
@@ -924,7 +1020,6 @@ router.post(
     }
   }
 );
-
 // -----------------------------------
 // SIMILAR INCIDENT SEARCH
 // -----------------------------------
@@ -973,6 +1068,7 @@ router.get(
       ) {
         return res.json({
           similarIncidents: [],
+
           threshold:
             SIMILAR_INCIDENT_THRESHOLD,
 
@@ -1199,6 +1295,33 @@ router.post('/', async (req, res) => {
     const savedIncident =
       await newIncident.save();
 
+    await recordIncidentEvent({
+      incidentId:
+        savedIncident._id.toString(),
+
+      userId,
+
+      eventType:
+        'incident_created',
+
+      metadata: {
+        priority:
+          savedIncident.priority,
+
+        status:
+          savedIncident.status,
+      },
+    });
+
+    broadcastEvent(
+      userId,
+      'incident_created',
+      {
+        incident: savedIncident,
+        timestamp: new Date(),
+      }
+    );
+
     return res
       .status(201)
       .json(savedIncident);
@@ -1394,16 +1517,20 @@ Use exactly this structure:
       );
 
       const response =
-        await withTimeout(
-          generateGeminiResponse(
-            ai,
-            modelName,
-            prompt
-          ),
+        await measureAiRequest(
+          'incident_analysis',
+          () =>
+            withTimeout(
+              generateGeminiResponse(
+                ai,
+                modelName,
+                prompt
+              ),
 
-          GEMINI_GENERATION_TIMEOUT_MS,
+              GEMINI_GENERATION_TIMEOUT_MS,
 
-          'AI analysis took too long.'
+              'AI analysis took too long.'
+            )
         );
 
       const rawText =
@@ -1551,6 +1678,30 @@ Use exactly this structure:
           },
         });
 
+      await recordIncidentEvent({
+        incidentId:
+          incident._id.toString(),
+
+        userId,
+
+        eventType:
+          'ai_analysis_generated',
+
+        metadata: {
+          analysisId:
+            savedAnalysis._id.toString(),
+
+          model:
+            modelName,
+
+          grounded:
+            sources.length > 0,
+
+          runbooksUsed:
+            sources.length,
+        },
+      });
+
       console.log(
         'AI ANALYSIS SAVED:',
         savedAnalysis._id.toString()
@@ -1602,7 +1753,6 @@ Use exactly this structure:
     }
   }
 );
-
 // -----------------------------------
 // SAVE AI FEEDBACK
 // -----------------------------------
@@ -1681,6 +1831,33 @@ router.post(
         feedback;
 
       await incident.save();
+
+      await recordIncidentEvent({
+        incidentId:
+          incident._id.toString(),
+
+        userId,
+
+        eventType:
+          'ai_feedback',
+
+        metadata: {
+          analysisId:
+            analysisRecord._id.toString(),
+
+          feedback,
+        },
+      });
+
+      broadcastEvent(
+        userId,
+        'incident_updated',
+        {
+          incident,
+          source: 'ai_feedback',
+          timestamp: new Date(),
+        }
+      );
 
       return res.json({
         message:
@@ -1761,6 +1938,31 @@ router.post(
       });
 
       await incident.save();
+
+      await recordIncidentEvent({
+        incidentId:
+          incident._id.toString(),
+
+        userId,
+
+        eventType:
+          'note_added',
+
+        metadata: {
+          noteLength:
+            note.trim().length,
+        },
+      });
+
+      broadcastEvent(
+        userId,
+        'incident_updated',
+        {
+          incident,
+          source: 'note',
+          timestamp: new Date(),
+        }
+      );
 
       return res.json(incident);
     } catch (error) {
@@ -1845,6 +2047,40 @@ router.put(
       const updatedIncident =
         await incident.save();
 
+      await recordIncidentEvent({
+        incidentId:
+          updatedIncident._id.toString(),
+
+        userId,
+
+        eventType:
+          'incident_updated',
+
+        metadata: {
+          titleUpdated:
+            req.body.title !== undefined,
+
+          descriptionUpdated:
+            req.body.description !== undefined,
+
+          priorityUpdated:
+            req.body.priority !== undefined,
+
+          statusUpdated:
+            req.body.status !== undefined,
+        },
+      });
+
+      broadcastEvent(
+        userId,
+        'incident_updated',
+        {
+          incident: updatedIncident,
+          source: 'manual_update',
+          timestamp: new Date(),
+        }
+      );
+
       return res.json(
         updatedIncident
       );
@@ -1893,6 +2129,34 @@ router.delete(
 
         owner: userId,
       });
+
+      await recordIncidentEvent({
+        incidentId:
+          deletedIncident._id.toString(),
+
+        userId,
+
+        eventType:
+          'incident_deleted',
+
+        metadata: {
+          priority:
+            deletedIncident.priority,
+
+          status:
+            deletedIncident.status,
+        },
+      });
+
+      broadcastEvent(
+        userId,
+        'incident_deleted',
+        {
+          incidentId:
+            deletedIncident._id,
+          timestamp: new Date(),
+        }
+      );
 
       return res.json({
         message:

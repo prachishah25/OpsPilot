@@ -1,4 +1,5 @@
 import React, {
+  useCallback,
   useEffect,
   useState,
 } from 'react';
@@ -11,6 +12,7 @@ const Dashboard = ({
   incidents,
   onDeleteIncident,
   onUpdateStatus,
+  realtimeStatus,
 }) => {
   const [
     searchTerm,
@@ -82,16 +84,149 @@ const Dashboard = ({
     setAiMetricsError,
   ] = useState('');
 
+  // -----------------------------------
+  // OBSERVABILITY STATE
+  // -----------------------------------
+
+  const [
+    observability,
+    setObservability,
+  ] = useState({
+    generatedAt: null,
+
+    http: {
+      totalRequests: 0,
+      totalErrors: 0,
+      errorRate: 0,
+      averageLatencyMs: 0,
+      totalLatencySeconds: 0,
+    },
+
+    ai: {
+      totalRequests: 0,
+      averageLatencySeconds: 0,
+      totalLatencySeconds: 0,
+    },
+
+    embeddings: {
+      totalGenerated: 0,
+      averageLatencyMs: 0,
+      totalLatencySeconds: 0,
+    },
+
+    semanticSearch: {
+      totalSearches: 0,
+      averageLatencySeconds: 0,
+      totalLatencySeconds: 0,
+    },
+  });
+
+  const [
+    isObservabilityLoading,
+    setIsObservabilityLoading,
+  ] = useState(true);
+
+  const [
+    observabilityError,
+    setObservabilityError,
+  ] = useState('');
+
   const token =
     localStorage.getItem(
       'token'
     );
+
+  // -----------------------------------
+  // SHARED STYLES
+  // -----------------------------------
 
   const iconStyle = {
     width: '18px',
     height: '18px',
     flexShrink: 0,
   };
+
+  const inputStyle = {
+    width: '100%',
+    padding: '11px 12px',
+    border:
+      '1px solid #cbd5e1',
+    borderRadius: '7px',
+    fontSize: '14px',
+    boxSizing: 'border-box',
+    outline: 'none',
+    backgroundColor: 'white',
+  };
+
+  const statCardStyle = {
+    flex: '1',
+    minWidth: '110px',
+    backgroundColor: 'white',
+    border:
+      '1px solid #d9dee8',
+    borderRadius: '8px',
+    padding: '16px 12px',
+    textAlign: 'center',
+    boxSizing: 'border-box',
+  };
+
+  // -----------------------------------
+  // REAL-TIME STATUS
+  // -----------------------------------
+
+  const getRealtimeStatusConfig =
+    () => {
+      if (
+        realtimeStatus ===
+        'live'
+      ) {
+        return {
+          label: 'Live',
+          textColor:
+            '#15803d',
+          backgroundColor:
+            '#f0fdf4',
+          borderColor:
+            '#bbf7d0',
+          dotColor:
+            '#22c55e',
+        };
+      }
+
+      if (
+        realtimeStatus ===
+        'connecting'
+      ) {
+        return {
+          label:
+            'Connecting...',
+          textColor:
+            '#a16207',
+          backgroundColor:
+            '#fefce8',
+          borderColor:
+            '#fde68a',
+          dotColor:
+            '#eab308',
+        };
+      }
+
+      return {
+        label:
+          'Disconnected',
+        textColor:
+          '#b91c1c',
+        backgroundColor:
+          '#fef2f2',
+        borderColor:
+          '#fecaca',
+        dotColor:
+          '#ef4444',
+      };
+    };
+
+  const realtimeConfig =
+    getRealtimeStatusConfig();
 
   // -----------------------------------
   // INCIDENT STATISTICS
@@ -160,36 +295,26 @@ const Dashboard = ({
           const data =
             await response.json();
 
-          if (
-            !response.ok
-          ) {
+          if (!response.ok) {
             throw new Error(
               data.error ||
                 'Failed to load AI evaluation metrics'
             );
           }
 
-          if (
-            !cancelled
-          ) {
+          if (!cancelled) {
             setAiMetrics(
               data.metrics
             );
           }
-        } catch (
-          error
-        ) {
-          if (
-            !cancelled
-          ) {
+        } catch (error) {
+          if (!cancelled) {
             setAiMetricsError(
               error.message
             );
           }
         } finally {
-          if (
-            !cancelled
-          ) {
+          if (!cancelled) {
             setIsAiMetricsLoading(
               false
             );
@@ -211,6 +336,71 @@ const Dashboard = ({
   }, [token]);
 
   // -----------------------------------
+  // LOAD OBSERVABILITY
+  // -----------------------------------
+
+  const loadObservability =
+    useCallback(
+      async () => {
+        if (!token) {
+          setIsObservabilityLoading(
+            false
+          );
+
+          return;
+        }
+
+        try {
+          setIsObservabilityLoading(
+            true
+          );
+
+          setObservabilityError(
+            ''
+          );
+
+          const response =
+            await fetch(
+              'http://localhost:5001/api/observability/summary',
+              {
+                headers: {
+                  Authorization:
+                    `Bearer ${token}`,
+                },
+              }
+            );
+
+          const data =
+            await response.json();
+
+          if (!response.ok) {
+            throw new Error(
+              data.error ||
+                'Failed to load observability metrics'
+            );
+          }
+
+          setObservability(
+            data
+          );
+        } catch (error) {
+          setObservabilityError(
+            error.message
+          );
+        } finally {
+          setIsObservabilityLoading(
+            false
+          );
+        }
+      },
+      [token]
+    );
+
+  useEffect(() => {
+    loadObservability();
+  }, [loadObservability]);
+
+  // -----------------------------------
   // SEARCH + FILTER
   // -----------------------------------
 
@@ -218,8 +408,7 @@ const Dashboard = ({
     incidents.filter(
       (incident) => {
         const title =
-          incident.title ||
-          '';
+          incident.title || '';
 
         const description =
           incident.description ||
@@ -276,88 +465,65 @@ const Dashboard = ({
 
   const sortedIncidents = [
     ...filteredIncidents,
-  ].sort(
-    (a, b) => {
-      if (
-        sortOption ===
-        'Newest'
-      ) {
-        return (
-          new Date(
-            b.createdAt
-          ) -
-          new Date(
-            a.createdAt
-          )
-        );
-      }
-
-      if (
-        sortOption ===
-        'Oldest'
-      ) {
-        return (
-          new Date(
-            a.createdAt
-          ) -
-          new Date(
-            b.createdAt
-          )
-        );
-      }
-
-      if (
-        sortOption ===
-        'Priority'
-      ) {
-        return (
-          priorityOrder[
-            b.priority
-          ] -
-          priorityOrder[
-            a.priority
-          ]
-        );
-      }
-
-      if (
-        sortOption ===
-        'Status'
-      ) {
-        return (
-          statusOrder[
-            a.status
-          ] -
-          statusOrder[
-            b.status
-          ]
-        );
-      }
-
-      return 0;
+  ].sort((a, b) => {
+    if (
+      sortOption === 'Newest'
+    ) {
+      return (
+        new Date(b.createdAt) -
+        new Date(a.createdAt)
+      );
     }
-  );
+
+    if (
+      sortOption === 'Oldest'
+    ) {
+      return (
+        new Date(a.createdAt) -
+        new Date(b.createdAt)
+      );
+    }
+
+    if (
+      sortOption === 'Priority'
+    ) {
+      return (
+        priorityOrder[b.priority] -
+        priorityOrder[a.priority]
+      );
+    }
+
+    if (
+      sortOption === 'Status'
+    ) {
+      return (
+        statusOrder[a.status] -
+        statusOrder[b.status]
+      );
+    }
+
+    return 0;
+  });
 
   // -----------------------------------
   // CLEAR FILTERS
   // -----------------------------------
 
-  const clearFilters =
-    () => {
-      setSearchTerm('');
+  const clearFilters = () => {
+    setSearchTerm('');
 
-      setPriorityFilter(
-        'All'
-      );
+    setPriorityFilter(
+      'All'
+    );
 
-      setStatusFilter(
-        'All'
-      );
+    setStatusFilter(
+      'All'
+    );
 
-      setSortOption(
-        'Newest'
-      );
-    };
+    setSortOption(
+      'Newest'
+    );
+  };
 
   // -----------------------------------
   // DATE FORMATTER
@@ -375,20 +541,11 @@ const Dashboard = ({
     ).toLocaleString(
       'en-US',
       {
-        month:
-          'short',
-
-        day:
-          'numeric',
-
-        year:
-          'numeric',
-
-        hour:
-          'numeric',
-
-        minute:
-          '2-digit',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
       }
     );
   };
@@ -397,33 +554,28 @@ const Dashboard = ({
   // NOTE CHANGE
   // -----------------------------------
 
-  const handleNoteChange =
-    (
-      incidentId,
-      value
-    ) => {
-      setNoteInputs(
-        (
-          currentInputs
-        ) => ({
-          ...currentInputs,
+  const handleNoteChange = (
+    incidentId,
+    value
+  ) => {
+    setNoteInputs(
+      (currentInputs) => ({
+        ...currentInputs,
 
-          [incidentId]:
-            value,
-        })
-      );
+        [incidentId]:
+          value,
+      })
+    );
 
-      setNoteErrors(
-        (
-          currentErrors
-        ) => ({
-          ...currentErrors,
+    setNoteErrors(
+      (currentErrors) => ({
+        ...currentErrors,
 
-          [incidentId]:
-            '',
-        })
-      );
-    };
+        [incidentId]:
+          '',
+      })
+    );
+  };
 
   // -----------------------------------
   // ADD NOTE
@@ -442,9 +594,7 @@ const Dashboard = ({
         !note.trim()
       ) {
         setNoteErrors(
-          (
-            currentErrors
-          ) => ({
+          (currentErrors) => ({
             ...currentErrors,
 
             [incidentId]:
@@ -461,9 +611,7 @@ const Dashboard = ({
         );
 
         setNoteErrors(
-          (
-            currentErrors
-          ) => ({
+          (currentErrors) => ({
             ...currentErrors,
 
             [incidentId]:
@@ -519,9 +667,7 @@ const Dashboard = ({
         );
 
         setNoteInputs(
-          (
-            currentInputs
-          ) => ({
+          (currentInputs) => ({
             ...currentInputs,
 
             [incidentId]:
@@ -532,9 +678,7 @@ const Dashboard = ({
         error
       ) {
         setNoteErrors(
-          (
-            currentErrors
-          ) => ({
+          (currentErrors) => ({
             ...currentErrors,
 
             [incidentId]:
@@ -581,60 +725,122 @@ const Dashboard = ({
     };
 
   // -----------------------------------
-  // SHARED STYLES
+  // OBSERVABILITY HELPERS
   // -----------------------------------
 
-  const inputStyle = {
-    width:
-      '100%',
+  const apiLatencyMs =
+    Number(
+      observability.http
+        ?.averageLatencyMs || 0
+    );
 
-    padding:
-      '11px 12px',
+  const aiLatencyMs =
+    Number(
+      observability.ai
+        ?.averageLatencySeconds ||
+        0
+    ) * 1000;
 
-    border:
-      '1px solid #cbd5e1',
+  const embeddingLatencyMs =
+    Number(
+      observability.embeddings
+        ?.averageLatencyMs || 0
+    );
 
-    borderRadius:
-      '7px',
+  const semanticLatencyMs =
+    Number(
+      observability
+        .semanticSearch
+        ?.averageLatencySeconds ||
+        0
+    ) * 1000;
 
-    fontSize:
-      '14px',
+  const maxObservedLatencyMs =
+    Math.max(
+      apiLatencyMs,
+      aiLatencyMs,
+      embeddingLatencyMs,
+      semanticLatencyMs,
+      1
+    );
 
-    boxSizing:
-      'border-box',
+  const getLatencyBarWidth = (
+    value
+  ) => {
+    if (!value) {
+      return '0%';
+    }
 
-    outline:
-      'none',
+    const percentage =
+      (value /
+        maxObservedLatencyMs) *
+      100;
 
-    backgroundColor:
-      'white',
+    return `${Math.max(
+      4,
+      Math.min(
+        100,
+        percentage
+      )
+    )}%`;
   };
 
-  const statCardStyle = {
-    flex:
-      '1',
+  const formatMilliseconds = (
+    value
+  ) => {
+    const numericValue =
+      Number(value || 0);
 
-    minWidth:
-      '110px',
+    if (
+      numericValue >= 1000
+    ) {
+      return `${(
+        numericValue / 1000
+      ).toFixed(2)} s`;
+    }
 
-    backgroundColor:
-      'white',
-
-    border:
-      '1px solid #d9dee8',
-
-    borderRadius:
-      '8px',
-
-    padding:
-      '16px 12px',
-
-    textAlign:
-      'center',
-
-    boxSizing:
-      'border-box',
+    return `${numericValue.toFixed(
+      1
+    )} ms`;
   };
+
+  const latencyMetrics = [
+    {
+      label:
+        'AI Generation',
+      value:
+        aiLatencyMs,
+      color:
+        '#7c3aed',
+    },
+
+    {
+      label:
+        'Semantic Search',
+      value:
+        semanticLatencyMs,
+      color:
+        '#b7791f',
+    },
+
+    {
+      label:
+        'Embedding Generation',
+      value:
+        embeddingLatencyMs,
+      color:
+        '#0f766e',
+    },
+
+    {
+      label:
+        'API Request Average',
+      value:
+        apiLatencyMs,
+      color:
+        '#2563eb',
+    },
+  ];
 
   // -----------------------------------
   // JSX
@@ -692,210 +898,90 @@ const Dashboard = ({
             '24px',
         }}
       >
-        <div
-          style={
-            statCardStyle
-          }
-        >
+        {[
+          {
+            value:
+              totalIncidents,
+            label:
+              'Total',
+            color:
+              '#111827',
+          },
+          {
+            value:
+              openIncidents,
+            label:
+              'Open',
+            color:
+              '#2563eb',
+          },
+          {
+            value:
+              inProgressIncidents,
+            label:
+              'In Progress',
+            color:
+              '#b7791f',
+          },
+          {
+            value:
+              resolvedIncidents,
+            label:
+              'Resolved',
+            color:
+              '#16a34a',
+          },
+          {
+            value:
+              criticalIncidents,
+            label:
+              'Critical',
+            color:
+              '#dc2626',
+          },
+        ].map((stat) => (
           <div
-            style={{
-              fontSize:
-                '28px',
-
-              fontWeight:
-                '700',
-
-              color:
-                '#111827',
-
-              marginBottom:
-                '6px',
-            }}
-          >
-            {
-              totalIncidents
+            key={
+              stat.label
             }
-          </div>
-
-          <div
-            style={{
-              color:
-                '#64748b',
-
-              fontSize:
-                '14px',
-
-              fontWeight:
-                '600',
-            }}
-          >
-            Total
-          </div>
-        </div>
-
-        <div
-          style={
-            statCardStyle
-          }
-        >
-          <div
-            style={{
-              fontSize:
-                '28px',
-
-              fontWeight:
-                '700',
-
-              color:
-                '#2563eb',
-
-              marginBottom:
-                '6px',
-            }}
-          >
-            {
-              openIncidents
+            style={
+              statCardStyle
             }
-          </div>
-
-          <div
-            style={{
-              color:
-                '#64748b',
-
-              fontSize:
-                '14px',
-
-              fontWeight:
-                '600',
-            }}
           >
-            Open
+            <div
+              style={{
+                fontSize:
+                  '28px',
+
+                fontWeight:
+                  '700',
+
+                color:
+                  stat.color,
+
+                marginBottom:
+                  '6px',
+              }}
+            >
+              {stat.value}
+            </div>
+
+            <div
+              style={{
+                color:
+                  '#64748b',
+
+                fontSize:
+                  '14px',
+
+                fontWeight:
+                  '600',
+              }}
+            >
+              {stat.label}
+            </div>
           </div>
-        </div>
-
-        <div
-          style={
-            statCardStyle
-          }
-        >
-          <div
-            style={{
-              fontSize:
-                '28px',
-
-              fontWeight:
-                '700',
-
-              color:
-                '#b7791f',
-
-              marginBottom:
-                '6px',
-            }}
-          >
-            {
-              inProgressIncidents
-            }
-          </div>
-
-          <div
-            style={{
-              color:
-                '#64748b',
-
-              fontSize:
-                '14px',
-
-              fontWeight:
-                '600',
-            }}
-          >
-            In Progress
-          </div>
-        </div>
-
-        <div
-          style={
-            statCardStyle
-          }
-        >
-          <div
-            style={{
-              fontSize:
-                '28px',
-
-              fontWeight:
-                '700',
-
-              color:
-                '#16a34a',
-
-              marginBottom:
-                '6px',
-            }}
-          >
-            {
-              resolvedIncidents
-            }
-          </div>
-
-          <div
-            style={{
-              color:
-                '#64748b',
-
-              fontSize:
-                '14px',
-
-              fontWeight:
-                '600',
-            }}
-          >
-            Resolved
-          </div>
-        </div>
-
-        <div
-          style={
-            statCardStyle
-          }
-        >
-          <div
-            style={{
-              fontSize:
-                '28px',
-
-              fontWeight:
-                '700',
-
-              color:
-                '#dc2626',
-
-              marginBottom:
-                '6px',
-            }}
-          >
-            {
-              criticalIncidents
-            }
-          </div>
-
-          <div
-            style={{
-              color:
-                '#64748b',
-
-              fontSize:
-                '14px',
-
-              fontWeight:
-                '600',
-            }}
-          >
-            Critical
-          </div>
-        </div>
+        ))}
       </div>
 
       {/* AI EVALUATION */}
@@ -1035,174 +1121,91 @@ const Dashboard = ({
                     'wrap',
                 }}
               >
-                <div
-                  style={
-                    statCardStyle
-                  }
-                >
-                  <div
-                    style={{
-                      fontSize:
-                        '27px',
+                {[
+                  {
+                    value:
+                      aiMetrics.totalAnalyses,
+                    label:
+                      'Total AI Analyses',
+                    color:
+                      '#2563eb',
+                  },
+                  {
+                    value:
+                      aiMetrics.groundedAnalyses,
+                    label:
+                      'Grounded Analyses',
+                    color:
+                      '#16a34a',
+                  },
+                  {
+                    value:
+                      `${aiMetrics.groundingRate}%`,
+                    label:
+                      'Grounding Rate',
+                    color:
+                      '#0f766e',
+                  },
+                  {
+                    value:
+                      aiMetrics.averageSemanticSimilarity ===
+                      null
+                        ? '—'
+                        : aiMetrics.averageSemanticSimilarity,
+                    label:
+                      'Avg Semantic Similarity',
+                    color:
+                      '#7c3aed',
+                  },
+                ].map(
+                  (metric) => (
+                    <div
+                      key={
+                        metric.label
+                      }
+                      style={
+                        statCardStyle
+                      }
+                    >
+                      <div
+                        style={{
+                          fontSize:
+                            '27px',
 
-                      fontWeight:
-                        '700',
+                          fontWeight:
+                            '700',
 
-                      color:
-                        '#2563eb',
+                          color:
+                            metric.color,
 
-                      marginBottom:
-                        '6px',
-                    }}
-                  >
-                    {
-                      aiMetrics.totalAnalyses
-                    }
-                  </div>
+                          marginBottom:
+                            '6px',
+                        }}
+                      >
+                        {
+                          metric.value
+                        }
+                      </div>
 
-                  <div
-                    style={{
-                      color:
-                        '#64748b',
+                      <div
+                        style={{
+                          color:
+                            '#64748b',
 
-                      fontSize:
-                        '13px',
+                          fontSize:
+                            '13px',
 
-                      fontWeight:
-                        '600',
-                    }}
-                  >
-                    Total AI
-                    Analyses
-                  </div>
-                </div>
-
-                <div
-                  style={
-                    statCardStyle
-                  }
-                >
-                  <div
-                    style={{
-                      fontSize:
-                        '27px',
-
-                      fontWeight:
-                        '700',
-
-                      color:
-                        '#16a34a',
-
-                      marginBottom:
-                        '6px',
-                    }}
-                  >
-                    {
-                      aiMetrics.groundedAnalyses
-                    }
-                  </div>
-
-                  <div
-                    style={{
-                      color:
-                        '#64748b',
-
-                      fontSize:
-                        '13px',
-
-                      fontWeight:
-                        '600',
-                    }}
-                  >
-                    Grounded
-                    Analyses
-                  </div>
-                </div>
-
-                <div
-                  style={
-                    statCardStyle
-                  }
-                >
-                  <div
-                    style={{
-                      fontSize:
-                        '27px',
-
-                      fontWeight:
-                        '700',
-
-                      color:
-                        '#0f766e',
-
-                      marginBottom:
-                        '6px',
-                    }}
-                  >
-                    {
-                      aiMetrics.groundingRate
-                    }
-                    %
-                  </div>
-
-                  <div
-                    style={{
-                      color:
-                        '#64748b',
-
-                      fontSize:
-                        '13px',
-
-                      fontWeight:
-                        '600',
-                    }}
-                  >
-                    Grounding Rate
-                  </div>
-                </div>
-
-                <div
-                  style={
-                    statCardStyle
-                  }
-                >
-                  <div
-                    style={{
-                      fontSize:
-                        '27px',
-
-                      fontWeight:
-                        '700',
-
-                      color:
-                        '#7c3aed',
-
-                      marginBottom:
-                        '6px',
-                    }}
-                  >
-                    {aiMetrics.averageSemanticSimilarity ===
-                    null
-                      ? '—'
-                      : aiMetrics.averageSemanticSimilarity}
-                  </div>
-
-                  <div
-                    style={{
-                      color:
-                        '#64748b',
-
-                      fontSize:
-                        '13px',
-
-                      fontWeight:
-                        '600',
-                    }}
-                  >
-                    Avg Semantic
-                    Similarity
-                  </div>
-                </div>
+                          fontWeight:
+                            '600',
+                        }}
+                      >
+                        {
+                          metric.label
+                        }
+                      </div>
+                    </div>
+                  )
+                )}
               </div>
 
               <div
@@ -1220,188 +1223,722 @@ const Dashboard = ({
                     '12px',
                 }}
               >
-                <div
-                  style={
-                    statCardStyle
-                  }
-                >
-                  <div
-                    style={{
-                      fontSize:
-                        '27px',
+                {[
+                  {
+                    value:
+                      aiMetrics.helpful,
+                    label:
+                      'Helpful',
+                    color:
+                      '#16a34a',
+                  },
+                  {
+                    value:
+                      aiMetrics.notHelpful,
+                    label:
+                      'Not Helpful',
+                    color:
+                      '#dc2626',
+                  },
+                  {
+                    value:
+                      aiMetrics.noFeedback,
+                    label:
+                      'No Feedback',
+                    color:
+                      '#64748b',
+                  },
+                  {
+                    value:
+                      `${aiMetrics.helpfulRate}%`,
+                    label:
+                      'Helpful Rate',
+                    color:
+                      '#7c3aed',
+                  },
+                ].map(
+                  (metric) => (
+                    <div
+                      key={
+                        metric.label
+                      }
+                      style={
+                        statCardStyle
+                      }
+                    >
+                      <div
+                        style={{
+                          fontSize:
+                            '27px',
 
-                      fontWeight:
-                        '700',
+                          fontWeight:
+                            '700',
 
-                      color:
-                        '#16a34a',
+                          color:
+                            metric.color,
 
-                      marginBottom:
-                        '6px',
-                    }}
-                  >
-                    {
-                      aiMetrics.helpful
-                    }
-                  </div>
+                          marginBottom:
+                            '6px',
+                        }}
+                      >
+                        {
+                          metric.value
+                        }
+                      </div>
 
-                  <div
-                    style={{
-                      color:
-                        '#64748b',
+                      <div
+                        style={{
+                          color:
+                            '#64748b',
 
-                      fontSize:
-                        '13px',
+                          fontSize:
+                            '13px',
 
-                      fontWeight:
-                        '600',
-                    }}
-                  >
-                    Helpful
-                  </div>
-                </div>
-
-                <div
-                  style={
-                    statCardStyle
-                  }
-                >
-                  <div
-                    style={{
-                      fontSize:
-                        '27px',
-
-                      fontWeight:
-                        '700',
-
-                      color:
-                        '#dc2626',
-
-                      marginBottom:
-                        '6px',
-                    }}
-                  >
-                    {
-                      aiMetrics.notHelpful
-                    }
-                  </div>
-
-                  <div
-                    style={{
-                      color:
-                        '#64748b',
-
-                      fontSize:
-                        '13px',
-
-                      fontWeight:
-                        '600',
-                    }}
-                  >
-                    Not Helpful
-                  </div>
-                </div>
-
-                <div
-                  style={
-                    statCardStyle
-                  }
-                >
-                  <div
-                    style={{
-                      fontSize:
-                        '27px',
-
-                      fontWeight:
-                        '700',
-
-                      color:
-                        '#64748b',
-
-                      marginBottom:
-                        '6px',
-                    }}
-                  >
-                    {
-                      aiMetrics.noFeedback
-                    }
-                  </div>
-
-                  <div
-                    style={{
-                      color:
-                        '#64748b',
-
-                      fontSize:
-                        '13px',
-
-                      fontWeight:
-                        '600',
-                    }}
-                  >
-                    No Feedback
-                  </div>
-                </div>
-
-                <div
-                  style={
-                    statCardStyle
-                  }
-                >
-                  <div
-                    style={{
-                      fontSize:
-                        '27px',
-
-                      fontWeight:
-                        '700',
-
-                      color:
-                        '#7c3aed',
-
-                      marginBottom:
-                        '6px',
-                    }}
-                  >
-                    {
-                      aiMetrics.helpfulRate
-                    }
-                    %
-                  </div>
-
-                  <div
-                    style={{
-                      color:
-                        '#64748b',
-
-                      fontSize:
-                        '13px',
-
-                      fontWeight:
-                        '600',
-                    }}
-                  >
-                    Helpful Rate
-                  </div>
-                </div>
+                          fontWeight:
+                            '600',
+                        }}
+                      >
+                        {
+                          metric.label
+                        }
+                      </div>
+                    </div>
+                  )
+                )}
               </div>
+            </>
+          )}
+      </div>
+
+      {/* SYSTEM OBSERVABILITY */}
+
+      <div
+        style={{
+          backgroundColor:
+            '#f8fafc',
+
+          border:
+            '1px solid #cbd5e1',
+
+          borderRadius:
+            '10px',
+
+          padding:
+            '22px',
+
+          marginBottom:
+            '24px',
+        }}
+      >
+        <div
+          style={{
+            textAlign:
+              'center',
+
+            marginBottom:
+              '18px',
+          }}
+        >
+          <div
+            style={{
+              display:
+                'flex',
+
+              justifyContent:
+                'center',
+
+              alignItems:
+                'center',
+
+              gap:
+                '10px',
+
+              flexWrap:
+                'wrap',
+
+              marginBottom:
+                '6px',
+            }}
+          >
+            <h3
+              style={{
+                margin:
+                  '0',
+
+                color:
+                  '#111827',
+
+                fontSize:
+                  '19px',
+              }}
+            >
+              System Observability
+            </h3>
+
+            <div
+              style={{
+                display:
+                  'inline-flex',
+
+                alignItems:
+                  'center',
+
+                gap:
+                  '6px',
+
+                padding:
+                  '5px 9px',
+
+                borderRadius:
+                  '999px',
+
+                border:
+                  `1px solid ${realtimeConfig.borderColor}`,
+
+                backgroundColor:
+                  realtimeConfig.backgroundColor,
+
+                color:
+                  realtimeConfig.textColor,
+
+                fontSize:
+                  '12px',
+
+                fontWeight:
+                  '700',
+              }}
+            >
+              <span
+                style={{
+                  width:
+                    '8px',
+
+                  height:
+                    '8px',
+
+                  borderRadius:
+                    '50%',
+
+                  backgroundColor:
+                    realtimeConfig.dotColor,
+
+                  display:
+                    'inline-block',
+                }}
+              />
+
+              {
+                realtimeConfig.label
+              }
+            </div>
+          </div>
+
+          <p
+            style={{
+              margin:
+                '0 0 14px',
+
+              color:
+                '#64748b',
+
+              fontSize:
+                '13px',
+
+              lineHeight:
+                '1.5',
+            }}
+          >
+            Live backend telemetry
+            for API traffic,
+            reliability, Gemini,
+            embeddings, and
+            semantic retrieval.
+          </p>
+
+          <button
+            type="button"
+            onClick={
+              loadObservability
+            }
+            disabled={
+              isObservabilityLoading
+            }
+            style={{
+              display:
+                'inline-flex',
+
+              alignItems:
+                'center',
+
+              justifyContent:
+                'center',
+
+              gap:
+                '7px',
+
+              padding:
+                '9px 15px',
+
+              borderRadius:
+                '7px',
+
+              border:
+                '1px solid #2563eb',
+
+              backgroundColor:
+                isObservabilityLoading
+                  ? '#e2e8f0'
+                  : 'white',
+
+              color:
+                isObservabilityLoading
+                  ? '#64748b'
+                  : '#2563eb',
+
+              fontWeight:
+                '600',
+
+              fontSize:
+                '13px',
+
+              cursor:
+                isObservabilityLoading
+                  ? 'not-allowed'
+                  : 'pointer',
+            }}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5" />
+              <path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 20v-5h-5" />
+            </svg>
+
+            {isObservabilityLoading
+              ? 'Refreshing...'
+              : 'Refresh Metrics'}
+          </button>
+        </div>
+
+        {isObservabilityLoading && (
+          <div
+            style={{
+              textAlign:
+                'center',
+
+              color:
+                '#64748b',
+
+              fontSize:
+                '13px',
+
+              marginBottom:
+                '14px',
+            }}
+          >
+            Loading observability
+            metrics...
+          </div>
+        )}
+
+        {observabilityError &&
+          !isObservabilityLoading && (
+            <div
+              style={{
+                padding:
+                  '12px',
+
+                borderRadius:
+                  '7px',
+
+                backgroundColor:
+                  '#fef2f2',
+
+                border:
+                  '1px solid #fecaca',
+
+                color:
+                  '#b91c1c',
+
+                textAlign:
+                  'center',
+              }}
+            >
+              {
+                observabilityError
+              }
+            </div>
+          )}
+
+        {!observabilityError && (
+          <>
+            <div
+              style={{
+                display:
+                  'flex',
+
+                gap:
+                  '12px',
+
+                flexWrap:
+                  'wrap',
+
+                opacity:
+                  isObservabilityLoading
+                    ? 0.65
+                    : 1,
+              }}
+            >
+              {[
+                {
+                  value:
+                    observability.http.totalRequests,
+                  label:
+                    'API Requests',
+                  color:
+                    '#2563eb',
+                },
+                {
+                  value:
+                    `${observability.http.errorRate}%`,
+                  label:
+                    'Error Rate',
+                  color:
+                    observability.http.errorRate >
+                    5
+                      ? '#dc2626'
+                      : '#16a34a',
+                },
+                {
+                  value:
+                    formatMilliseconds(
+                      apiLatencyMs
+                    ),
+                  label:
+                    'Avg API Latency',
+                  color:
+                    '#0f766e',
+                },
+                {
+                  value:
+                    observability.ai.totalRequests,
+                  label:
+                    'AI Requests',
+                  color:
+                    '#7c3aed',
+                },
+              ].map(
+                (metric) => (
+                  <div
+                    key={
+                      metric.label
+                    }
+                    style={
+                      statCardStyle
+                    }
+                  >
+                    <div
+                      style={{
+                        fontSize:
+                          '27px',
+
+                        fontWeight:
+                          '700',
+
+                        color:
+                          metric.color,
+
+                        marginBottom:
+                          '6px',
+                      }}
+                    >
+                      {
+                        metric.value
+                      }
+                    </div>
+
+                    <div
+                      style={{
+                        color:
+                          '#64748b',
+
+                        fontSize:
+                          '13px',
+
+                        fontWeight:
+                          '600',
+                      }}
+                    >
+                      {
+                        metric.label
+                      }
+                    </div>
+                  </div>
+                )
+              )}
+            </div>
+
+            <div
+              style={{
+                display:
+                  'flex',
+
+                gap:
+                  '12px',
+
+                flexWrap:
+                  'wrap',
+
+                marginTop:
+                  '12px',
+
+                opacity:
+                  isObservabilityLoading
+                    ? 0.65
+                    : 1,
+              }}
+            >
+              {[
+                {
+                  value:
+                    formatMilliseconds(
+                      aiLatencyMs
+                    ),
+                  label:
+                    'Avg AI Latency',
+                  color:
+                    '#7c3aed',
+                },
+                {
+                  value:
+                    observability.embeddings.totalGenerated,
+                  label:
+                    'Embeddings',
+                  color:
+                    '#0f766e',
+                },
+                {
+                  value:
+                    formatMilliseconds(
+                      embeddingLatencyMs
+                    ),
+                  label:
+                    'Avg Embedding',
+                  color:
+                    '#0f766e',
+                },
+                {
+                  value:
+                    formatMilliseconds(
+                      semanticLatencyMs
+                    ),
+                  label:
+                    'Semantic Search',
+                  color:
+                    '#b7791f',
+                },
+              ].map(
+                (metric) => (
+                  <div
+                    key={
+                      metric.label
+                    }
+                    style={
+                      statCardStyle
+                    }
+                  >
+                    <div
+                      style={{
+                        fontSize:
+                          '27px',
+
+                        fontWeight:
+                          '700',
+
+                        color:
+                          metric.color,
+
+                        marginBottom:
+                          '6px',
+                      }}
+                    >
+                      {
+                        metric.value
+                      }
+                    </div>
+
+                    <div
+                      style={{
+                        color:
+                          '#64748b',
+
+                        fontSize:
+                          '13px',
+
+                        fontWeight:
+                          '600',
+                      }}
+                    >
+                      {
+                        metric.label
+                      }
+                    </div>
+                  </div>
+                )
+              )}
+            </div>
+
+            <div
+              style={{
+                marginTop:
+                  '18px',
+
+                padding:
+                  '16px',
+
+                border:
+                  '1px solid #e2e8f0',
+
+                borderRadius:
+                  '8px',
+
+                backgroundColor:
+                  'white',
+
+                opacity:
+                  isObservabilityLoading
+                    ? 0.65
+                    : 1,
+              }}
+            >
+              <div
+                style={{
+                  color:
+                    '#111827',
+
+                  fontWeight:
+                    '700',
+
+                  fontSize:
+                    '14px',
+
+                  marginBottom:
+                    '16px',
+                }}
+              >
+                Latency Breakdown
+              </div>
+
+              {latencyMetrics.map(
+                (metric) => (
+                  <div
+                    key={
+                      metric.label
+                    }
+                    style={{
+                      marginBottom:
+                        '14px',
+                    }}
+                  >
+                    <div
+                      style={{
+                        display:
+                          'flex',
+
+                        justifyContent:
+                          'space-between',
+
+                        gap:
+                          '12px',
+
+                        marginBottom:
+                          '6px',
+
+                        fontSize:
+                          '12px',
+
+                        color:
+                          '#475569',
+                      }}
+                    >
+                      <span>
+                        {
+                          metric.label
+                        }
+                      </span>
+
+                      <strong
+                        style={{
+                          color:
+                            '#111827',
+                        }}
+                      >
+                        {formatMilliseconds(
+                          metric.value
+                        )}
+                      </strong>
+                    </div>
+
+                    <div
+                      style={{
+                        width:
+                          '100%',
+
+                        height:
+                          '8px',
+
+                        backgroundColor:
+                          '#e2e8f0',
+
+                        borderRadius:
+                          '999px',
+
+                        overflow:
+                          'hidden',
+                      }}
+                    >
+                      <div
+                        style={{
+                          width:
+                            getLatencyBarWidth(
+                              metric.value
+                            ),
+
+                          height:
+                            '100%',
+
+                          backgroundColor:
+                            metric.color,
+
+                          borderRadius:
+                            '999px',
+
+                          transition:
+                            'width 0.3s ease',
+                        }}
+                      />
+                    </div>
+                  </div>
+                )
+              )}
 
               <div
                 style={{
                   marginTop:
-                    '16px',
+                    '8px',
 
-                  padding:
-                    '12px 14px',
+                  paddingTop:
+                    '12px',
 
-                  borderRadius:
-                    '7px',
-
-                  backgroundColor:
-                    'white',
-
-                  border:
-                    '1px solid #dbeafe',
+                  borderTop:
+                    '1px solid #e2e8f0',
 
                   color:
                     '#64748b',
@@ -1413,43 +1950,50 @@ const Dashboard = ({
                     '1.6',
                 }}
               >
-                Helpful Rate uses
-                only analyses that
-                received feedback.
-                Semantic similarity
-                is averaged across
-                stored semantic
-                runbook sources.
+                Semantic searches:{' '}
+                {
+                  observability
+                    .semanticSearch
+                    .totalSearches
+                }
+                {' · '}
+                Backend errors:{' '}
+                {
+                  observability
+                    .http
+                    .totalErrors
+                }
+                {' · '}
+                Metrics reset when
+                the backend container
+                restarts.
               </div>
 
-              {aiMetrics.totalAnalyses ===
-                0 && (
+              {observability.generatedAt && (
                 <div
                   style={{
                     marginTop:
-                      '16px',
-
-                    textAlign:
-                      'center',
+                      '8px',
 
                     color:
-                      '#64748b',
+                      '#94a3b8',
 
                     fontSize:
-                      '13px',
+                      '11px',
+
+                    textAlign:
+                      'right',
                   }}
                 >
-                  No saved AI
-                  analyses yet.
-                  Analyze an
-                  incident to begin
-                  collecting
-                  evaluation
-                  metrics.
+                  Last refreshed:{' '}
+                  {formatDate(
+                    observability.generatedAt
+                  )}
                 </div>
               )}
-            </>
-          )}
+            </div>
+          </>
+        )}
       </div>
 
       {/* SEARCH / FILTER / SORT */}
@@ -1668,8 +2212,6 @@ const Dashboard = ({
         </button>
       </div>
 
-      {/* NUMBER OF INCIDENTS */}
-
       <p
         style={{
           textAlign:
@@ -1696,36 +2238,34 @@ const Dashboard = ({
         incidents
       </p>
 
-      {/* NO RESULTS */}
-
       {sortedIncidents.length ===
         0 && (
-        <div
-          style={{
-            border:
-              '1px solid #d9dee8',
+          <div
+            style={{
+              border:
+                '1px solid #d9dee8',
 
-            borderRadius:
-              '8px',
+              borderRadius:
+                '8px',
 
-            padding:
-              '30px',
+              padding:
+                '30px',
 
-            textAlign:
-              'center',
+              textAlign:
+                'center',
 
-            color:
-              '#64748b',
+              color:
+                '#64748b',
 
-            backgroundColor:
-              'white',
-          }}
-        >
-          No incidents match
-          your search or
-          filters.
-        </div>
-      )}
+              backgroundColor:
+                'white',
+            }}
+          >
+            No incidents match
+            your search or
+            filters.
+          </div>
+        )}
 
       {/* INCIDENT CARDS */}
 
@@ -1782,8 +2322,6 @@ const Dashboard = ({
                   'center',
               }}
             >
-              {/* TITLE */}
-
               <Link
                 to={`/incidents/${incident._id}`}
                 style={{
@@ -1839,8 +2377,6 @@ const Dashboard = ({
               >
                 View Details →
               </Link>
-
-              {/* DESCRIPTION */}
 
               <p
                 style={{
@@ -2054,81 +2590,81 @@ const Dashboard = ({
               >
                 {incident.status !==
                   'Resolved' && (
-                  <button
-                    style={{
-                      backgroundColor:
-                        'white',
+                    <button
+                      style={{
+                        backgroundColor:
+                          'white',
 
-                      color:
-                        '#16a34a',
+                        color:
+                          '#16a34a',
 
-                      border:
-                        '1px solid #22c55e',
+                        border:
+                          '1px solid #22c55e',
 
-                      padding:
-                        '9px 14px',
+                        padding:
+                          '9px 14px',
 
-                      borderRadius:
-                        '6px',
+                        borderRadius:
+                          '6px',
 
-                      cursor:
-                        'pointer',
+                        cursor:
+                          'pointer',
 
-                      fontWeight:
-                        '600',
+                        fontWeight:
+                          '600',
 
-                      fontSize:
-                        '14px',
-                    }}
-                    onClick={() =>
-                      handleStatusUpdate(
-                        incident._id,
-                        'Resolved'
-                      )
-                    }
-                  >
-                    ✓ Mark Resolved
-                  </button>
-                )}
+                        fontSize:
+                          '14px',
+                      }}
+                      onClick={() =>
+                        handleStatusUpdate(
+                          incident._id,
+                          'Resolved'
+                        )
+                      }
+                    >
+                      ✓ Mark Resolved
+                    </button>
+                  )}
 
                 {incident.status ===
                   'Open' && (
-                  <button
-                    style={{
-                      backgroundColor:
-                        'white',
+                    <button
+                      style={{
+                        backgroundColor:
+                          'white',
 
-                      color:
-                        '#1554c0',
+                        color:
+                          '#1554c0',
 
-                      border:
-                        '1px solid #2563eb',
+                        border:
+                          '1px solid #2563eb',
 
-                      padding:
-                        '9px 14px',
+                        padding:
+                          '9px 14px',
 
-                      borderRadius:
-                        '6px',
+                        borderRadius:
+                          '6px',
 
-                      cursor:
-                        'pointer',
+                        cursor:
+                          'pointer',
 
-                      fontWeight:
-                        '600',
+                        fontWeight:
+                          '600',
 
-                      fontSize:
-                        '14px',
-                    }}
-                    onClick={() =>
-                      handleStatusUpdate(
-                        incident._id,
-                        'In Progress'
-                      )
-                    }
-                  >
-                    Start Progress
-                  </button>
-                )}
+                        fontSize:
+                          '14px',
+                      }}
+                      onClick={() =>
+                        handleStatusUpdate(
+                          incident._id,
+                          'In Progress'
+                        )
+                      }
+                    >
+                      Start Progress
+                    </button>
+                  )}
 
                 <button
                   style={{
@@ -2197,8 +2733,6 @@ const Dashboard = ({
                 >
                   Activity
                 </h4>
-
-                {/* ADD NOTE */}
 
                 <div
                   style={{
@@ -2315,8 +2849,6 @@ const Dashboard = ({
                   </button>
                 </div>
 
-                {/* NOTE ERROR */}
-
                 {noteErrors[
                   incident._id
                 ] && (
@@ -2339,8 +2871,6 @@ const Dashboard = ({
                     }
                   </div>
                 )}
-
-                {/* ACTIVITY TIMELINE */}
 
                 {sortedActivity.length ===
                 0 ? (
