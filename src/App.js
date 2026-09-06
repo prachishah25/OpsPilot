@@ -105,7 +105,7 @@ const App = () => {
         try {
           const response =
             await fetch(
-              'http://localhost:5001/api/incidents',
+              'https://opspilot-9am7.onrender.com/api/incidents',
               {
                 headers: {
                   Authorization:
@@ -176,7 +176,7 @@ const App = () => {
 
           const response =
             await fetch(
-              'http://localhost:5001/api/realtime/stream',
+              'https://opspilot-9am7.onrender.com/api/realtime/stream',
               {
                 method: 'GET',
 
@@ -487,7 +487,7 @@ const App = () => {
       try {
         const response =
           await fetch(
-            `http://localhost:5001/api/incidents/${id}`,
+            `https://opspilot-9am7.onrender.com/api/incidents/${id}`,
             {
               method:
                 'DELETE',
@@ -532,7 +532,7 @@ const App = () => {
       try {
         const response =
           await fetch(
-            `http://localhost:5001/api/incidents/${id}`,
+            `https://opspilot-9am7.onrender.com/api/incidents/${id}`,
             {
               method:
                 'PUT',
