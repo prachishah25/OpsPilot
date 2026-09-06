@@ -2,11 +2,50 @@
 
 AI-powered incident management platform for modern software engineering teams.
 
-OpsPilot helps engineering teams investigate, manage, and resolve production incidents faster by combining Generative AI, semantic search, Retrieval-Augmented Generation (RAG), and incident analytics into a single platform.
+OpsPilot helps engineers investigate, manage, and resolve production incidents using Generative AI, Retrieval-Augmented Generation (RAG), semantic search, and operational analytics.
 
 ---
 
-## Overview
+# 🚀 Live Demo
+
+**Frontend (Vercel)**
+
+https://ops-pilot-gules.vercel.app
+
+**Backend API (Render)**
+
+https://opspilot-9am7.onrender.com
+
+---
+
+# Tech Stack
+
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)
+![Node.js](https://img.shields.io/badge/Node.js-Express-339933?logo=node.js)
+![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-47A248?logo=mongodb)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Neon-336791?logo=postgresql)
+![Google Gemini](https://img.shields.io/badge/Google-Gemini-4285F4?logo=google)
+![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker)
+![JWT](https://img.shields.io/badge/Auth-JWT-black)
+
+---
+
+# Portfolio Highlights
+
+- AI-powered incident analysis using Google Gemini
+- Retrieval-Augmented Generation (RAG) for operational runbooks
+- Semantic search using embeddings
+- Similar incident discovery
+- PostgreSQL analytics
+- JWT authentication
+- Dockerized backend
+- Production deployment using Vercel and Render
+- Operational observability
+- Real-time incident dashboard
+
+---
+
+# Overview
 
 When production incidents occur, engineers often spend valuable time searching documentation, investigating previous incidents, and determining the next troubleshooting steps.
 
@@ -15,49 +54,52 @@ OpsPilot streamlines this workflow by providing AI-powered incident analysis, in
 For every incident, OpsPilot can:
 
 - Analyze incidents using Google Gemini
-- Retrieve relevant operational runbooks (RAG)
+- Retrieve operational runbooks using Retrieval-Augmented Generation (RAG)
 - Find semantically similar historical incidents
 - Recommend troubleshooting steps
 - Track the complete incident lifecycle
-- Record AI interactions for observability and analytics
+- Record AI interactions for analytics and observability
 
 ---
 
-## Features
+# Features
 
-### Incident Management
+## Incident Management
 
 - Create incidents
 - Update incidents
 - Delete incidents
 - Track incident status
 - Assign priorities
-- Maintain activity timeline
-- Add investigation notes
+- Maintain investigation timeline
+- Add engineering notes
 
-### AI Features
+## AI Features
 
-- AI-powered incident analysis
-- Similar incident search using embeddings
+- Google Gemini incident analysis
+- Semantic similarity search
 - Retrieval-Augmented Generation (RAG)
-- AI-generated troubleshooting recommendations
+- AI troubleshooting recommendations
 - AI feedback collection
-- AI tool execution
+- AI execution analytics
 
-### Analytics
+## Analytics
 
 - PostgreSQL event analytics
 - Incident lifecycle tracking
-- AI interaction tracking
+- AI usage analytics
 - Operational event logging
+- Grounding metrics
+- Semantic similarity metrics
 
-### Platform
+## Platform
 
 - JWT Authentication
 - MongoDB persistence
+- PostgreSQL analytics
 - Dockerized deployment
-- Observability endpoints
 - Server-Sent Events (SSE)
+- REST API architecture
 
 ---
 
@@ -67,6 +109,7 @@ For every incident, OpsPilot can:
 
 - React
 - React Router
+- Axios
 
 ## Backend
 
@@ -76,19 +119,23 @@ For every incident, OpsPilot can:
 ## Databases
 
 - MongoDB
-- PostgreSQL
+- PostgreSQL (Neon)
 
-## AI
+## Artificial Intelligence
 
 - Google Gemini
-- Text Embeddings
+- Embeddings
 - Retrieval-Augmented Generation (RAG)
 - Prompt Engineering
+- Semantic Search
 
 ## DevOps
 
 - Docker
 - Docker Compose
+- Vercel
+- Render
+- GitHub
 
 ---
 
@@ -97,180 +144,40 @@ For every incident, OpsPilot can:
 ```mermaid
 flowchart LR
 
-    User["👨‍💻 Engineer"]
+User["👨‍💻 Engineer"]
 
-    Frontend["React Frontend"]
+Frontend["React Frontend"]
 
-    Backend["Express API"]
+Backend["Express API"]
 
-    Auth["JWT Authentication"]
+Auth["JWT Authentication"]
 
-    Mongo["MongoDB"]
+Mongo["MongoDB"]
 
-    Analytics["PostgreSQL Analytics"]
+Analytics["PostgreSQL Analytics"]
 
-    Gemini["Google Gemini"]
+Gemini["Google Gemini"]
 
-    Embeddings["Embedding Service"]
+Embeddings["Embedding Service"]
 
-    Runbooks["Runbook Retrieval (RAG)"]
+Runbooks["Runbook Retrieval (RAG)"]
 
-    User --> Frontend
+User --> Frontend
 
-    Frontend --> Backend
+Frontend --> Backend
 
-    Backend --> Auth
+Backend --> Auth
 
-    Backend --> Mongo
+Backend --> Mongo
 
-    Backend --> Analytics
+Backend --> Analytics
 
-    Backend --> Gemini
+Backend --> Gemini
 
-    Backend --> Embeddings
+Backend --> Embeddings
 
-    Backend --> Runbooks
+Backend --> Runbooks
 
-    Embeddings --> Mongo
+Embeddings --> Mongo
 
-    Runbooks --> Gemini
-```
-
----
-
-# Project Structure
-
-```
-OpsPilot
-│
-├── backend
-│   ├── middleware
-│   ├── models
-│   ├── routes
-│   ├── services
-│   ├── server.js
-│   └── app.js
-│
-├── src
-│   ├── components
-│   ├── pages
-│   ├── services
-│   └── App.js
-│
-├── docker-compose.yml
-└── README.md
-```
-
----
-
-# Screenshots
-
-### Dashboard
-
-![Dashboard](docs/images/dashboard.png)
-
-### AI Incident Analysis
-
-![AI Analysis](docs/images/ai-analysis.png)
-
-### Similar Incident Search
-
-![Similar Incidents](docs/images/similar-incidents.png)
-
-### Runbook Retrieval
-
-![Runbooks](docs/images/runbooks.png)
-
----
-
-# Installation
-
-## Clone the repository
-
-```bash
-git clone https://github.com/prachishah25/OpsPilot.git
-```
-
-```bash
-cd OpsPilot
-```
-
----
-
-## Install dependencies
-
-Frontend
-
-```bash
-npm install
-```
-
-Backend
-
-```bash
-cd backend
-npm install
-```
-
----
-
-## Environment Variables
-
-Create a `.env` file inside the `backend` folder.
-
-Example:
-
-```text
-MONGO_URI=your_mongodb_connection_string
-
-JWT_SECRET=your_secret
-
-GEMINI_API_KEY=your_gemini_api_key
-
-POSTGRES_HOST=postgres
-
-POSTGRES_PORT=5432
-
-POSTGRES_DB=opspilot
-
-POSTGRES_USER=opspilot
-
-POSTGRES_PASSWORD=opspilot_dev_password
-```
-
----
-
-## Run with Docker
-
-```bash
-docker compose up --build
-```
-
----
-
-# Future Improvements
-
-- Slack integration
-- Email notifications
-- Multi-user collaboration
-- Incident assignments
-- Role-based access control
-- Real-time collaboration
-- Metrics dashboard
-- Kubernetes deployment
-
----
-
-# Author
-
-**Prachi Shah**
-
-GitHub:
-
-https://github.com/prachishah25
-
----
-
-# License
-
-This project is intended for educational and portfolio purposes.
+Runbooks --> Gemini
