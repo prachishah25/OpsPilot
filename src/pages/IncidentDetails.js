@@ -1488,7 +1488,10 @@ const IncidentDetails = ({
                       cursor: 'pointer',
                     }}
                   >
-                    👍 Helpful
+                    <span role="img" aria-label="thumbs up">
+  👍
+</span>{' '}
+Helpful
                   </button>
 
                   <button
@@ -1522,7 +1525,10 @@ const IncidentDetails = ({
                       cursor: 'pointer',
                     }}
                   >
-                    👎 Not Helpful
+                    <span role="img" aria-label="thumbs down">
+  👎
+</span>{' '}
+Not Helpful
                   </button>
                 </div>
 
