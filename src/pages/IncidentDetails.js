@@ -235,7 +235,7 @@ const IncidentDetails = ({
 
         const response =
           await fetch(
-            `http://localhost:5001/api/incidents/${id}/ai-history`,
+            `https://opspilot-9am7.onrender.com/api/incidents/${id}/ai-history`,
             {
               headers: {
                 Authorization:
@@ -288,7 +288,7 @@ const IncidentDetails = ({
 
           const response =
             await fetch(
-              `http://localhost:5001/api/incidents/${id}/ai-history`,
+              `https://opspilot-9am7.onrender.com/api/incidents/${id}/ai-history`,
               {
                 headers: {
                   Authorization:
@@ -360,7 +360,7 @@ const IncidentDetails = ({
 
         const response =
           await fetch(
-            `http://localhost:5001/api/incidents/${id}/notes`,
+            `https://opspilot-9am7.onrender.com/api/incidents/${id}/notes`,
             {
               method: 'POST',
 
@@ -472,7 +472,7 @@ const IncidentDetails = ({
 
         const response =
           await fetch(
-            `http://localhost:5001/api/incidents/${id}/analyze`,
+            `https://opspilot-9am7.onrender.com/api/incidents/${id}/analyze`,
             {
               method: 'POST',
 
@@ -538,7 +538,7 @@ const IncidentDetails = ({
 
         const response =
           await fetch(
-            `http://localhost:5001/api/incidents/${id}/ai-feedback`,
+            `https://opspilot-9am7.onrender.com/api/incidents/${id}/ai-feedback`,
             {
               method: 'POST',
 
@@ -629,7 +629,7 @@ const IncidentDetails = ({
 
         const response =
           await fetch(
-            `http://localhost:5001/api/incidents/${id}/ai-tool-plan`,
+            `https://opspilot-9am7.onrender.com/api/incidents/${id}/ai-tool-plan`,
             {
               method: 'POST',
 
@@ -698,7 +698,7 @@ const IncidentDetails = ({
 
         const response =
           await fetch(
-            `http://localhost:5001/api/incidents/${id}/ai-tool-execute`,
+            `https://opspilot-9am7.onrender.com/api/incidents/${id}/ai-tool-execute`,
             {
               method: 'POST',
 
@@ -767,7 +767,7 @@ const IncidentDetails = ({
 
         const response =
           await fetch(
-            `http://localhost:5001/api/incidents/${id}/similar`,
+            `https://opspilot-9am7.onrender.com/api/incidents/${id}/similar`,
             {
               headers: {
                 Authorization:

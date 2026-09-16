@@ -25,7 +25,7 @@ const NewIncident = ({ onAddIncident }) => {
       setMessage('');
 
       const response = await fetch(
-        'http://localhost:5001/api/incidents',
+        'https://opspilot-9am7.onrender.com/api/incidents',
         {
           method: 'POST',
           headers: {
