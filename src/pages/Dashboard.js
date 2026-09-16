@@ -283,7 +283,7 @@ const Dashboard = ({
 
           const response =
             await fetch(
-              'http://localhost:5001/api/incidents/analytics/ai-evaluation',
+              'https://opspilot-9am7.onrender.com/api/incidents/analytics/ai-evaluation',
               {
                 headers: {
                   Authorization:
@@ -361,7 +361,7 @@ const Dashboard = ({
 
           const response =
             await fetch(
-              'http://localhost:5001/api/observability/summary',
+              'https://opspilot-9am7.onrender.com/api/observability/summary',
               {
                 headers: {
                   Authorization:
@@ -621,7 +621,7 @@ const Dashboard = ({
 
         const response =
           await fetch(
-            `http://localhost:5001/api/incidents/${incidentId}/notes`,
+            `https://opspilot-9am7.onrender.com/api/incidents/${incidentId}/notes`,
             {
               method:
                 'POST',
