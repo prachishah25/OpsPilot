@@ -25,7 +25,7 @@ const Signup = () => {
       setMessage('');
 
       const response = await fetch(
-        'http://localhost:5001/api/auth/signup',
+        'https://opspilot-9am7.onrender.com/api/auth/signup',
         {
           method: 'POST',
           headers: {
